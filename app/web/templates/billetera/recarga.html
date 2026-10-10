@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block titulo %}Recargar saldo{% endblock %}
+
+{% block contenido %}
+<div class="max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+  <h1 class="text-2xl font-semibold text-slate-900">Recargar saldo</h1>
+  <p class="text-sm text-slate-500 mt-2">Acredita créditos virtuales a un usuario.</p>
+
+  {% if mensaje %}
+  <p class="mt-4 bg-emerald-100 text-emerald-800 text-sm px-3 py-2 rounded-lg">{{ mensaje }}</p>
+  {% endif %}
+  {% if error %}
+  <p class="mt-4 bg-rose-100 text-rose-800 text-sm px-3 py-2 rounded-lg">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/admin/billetera/recargar" class="mt-6 space-y-4">
+    <div>
+      <label for="usuario_id" class="text-sm text-slate-500">Usuario</label>
+      <select id="usuario_id" name="usuario_id" required
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        {% for u in usuarios %}
+        <option value="{{ u.id }}">{{ u.nombre_usuario }} ({{ u.email }}) - saldo {{ u.saldo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="monto" class="text-sm text-slate-500">Monto</label>
+      <input id="monto" name="monto" type="number" step="0.01" min="0.01" required
+             class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+    </div>
+    <div>
+      <label for="descripcion" class="text-sm text-slate-500">Descripción (opcional)</label>
+      <input id="descripcion" name="descripcion" type="text" maxlength="255"
+             class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+    </div>
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Recargar</button>
+  </form>
+</div>
+{% endblock %}

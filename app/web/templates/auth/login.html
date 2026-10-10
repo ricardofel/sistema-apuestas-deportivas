@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block titulo %}Iniciar sesión{% endblock %}
+
+{% block contenido %}
+<div class="max-w-md mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+  <h1 class="text-2xl font-semibold text-slate-900">Iniciar sesión</h1>
+
+  {% if error %}
+  <p class="mt-4 bg-rose-100 text-rose-800 text-sm px-3 py-2 rounded-lg">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/login" class="mt-6 space-y-4">
+    <div>
+      <label for="email" class="text-sm text-slate-500">Email</label>
+      <input id="email" name="email" type="email" required value="{{ email }}"
+             class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+    </div>
+    <div>
+      <label for="password" class="text-sm text-slate-500">Contraseña</label>
+      <input id="password" name="password" type="password" required
+             class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+    </div>
+    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Entrar</button>
+  </form>
+
+  <p class="mt-4 text-sm text-slate-500">¿No tienes cuenta? <a href="/registro" class="text-emerald-700 hover:underline">Regístrate</a></p>
+</div>
+{% endblock %}

@@ -41,8 +41,11 @@
       </div>
       <div class="flex items-center gap-4 text-sm">
         {% if usuario %}
-        <span id="saldo-nav" class="font-medium text-slate-900">{{ usuario.saldo }} créditos</span>
+        {% include "billetera/_saldo_nav.html" %}
         <span class="text-slate-500">{{ usuario.nombre_usuario }}</span>
+        <form method="post" action="/logout">
+          <button type="submit" class="hover:text-emerald-700">Salir</button>
+        </form>
         {% else %}
         <a href="/login" class="hover:text-emerald-700">Iniciar sesión</a>
         <a href="/registro" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1.5 rounded-lg transition">Registrarse</a>
