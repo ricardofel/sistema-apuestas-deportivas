@@ -34,6 +34,19 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 La aplicación corre en http://localhost:8000 y la documentación de la API en http://localhost:8000/docs.
 
+## Datos de ejemplo y administrador
+
+Con las migraciones aplicadas, carga los eventos de ejemplo (equipos ecuatorianos) y crea un administrador. Los scripts se ejecutan desde la raíz del proyecto con `python -m`:
+
+```bash
+python -m scripts.seed
+python -m scripts.crear_admin --email admin@correo.com --nombre admin
+```
+
+`crear_admin` pide la contraseña por teclado. Las fechas del seeder son relativas a hoy; cuando los eventos ya hayan pasado, vuelve a cargarlos con `python -m scripts.seed --reiniciar`.
+
+Flujo para probar: regístrate en `/registro`, entra como administrador, recarga saldo al usuario en `/admin/billetera` y revisa la billetera del usuario en `/billetera`.
+
 ## Rutina diaria
 
 ```bash
@@ -55,7 +68,12 @@ pytest tests/test_base.py::test_check_rechaza_monto_negativo   # un solo test
 ```bash
 rm apuestas.db apuestas.db-wal apuestas.db-shm
 alembic upgrade head
+python -m scripts.seed
 ```
+
+## Migraciones
+
+Las migraciones las genera una sola persona (Integrante A) para mantener un historial lineal. Si necesitas cambiar un modelo, avísale; no corras `alembic revision`.
 
 ## CSS de producción (Tailwind)
 

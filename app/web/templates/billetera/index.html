@@ -35,7 +35,7 @@
         <tbody>
           {% for t in transacciones %}
           <tr class="border-b border-slate-100">
-            <td class="py-2 pr-4 whitespace-nowrap">{{ t.creado_en.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="py-2 pr-4 whitespace-nowrap">{{ t.creado_en | hora_local }}</td>
             <td class="py-2 pr-4"><span class="{{ estilos_tipo[t.tipo.value] }} text-xs px-2 py-1 rounded-full">{{ t.tipo.value }}</span></td>
             <td class="py-2 pr-4 text-slate-500">{{ t.descripcion or "" }}</td>
             <td class="py-2 pr-4 text-right font-medium {{ 'text-rose-700' if t.monto < 0 else 'text-emerald-700' }}">{{ '{:+.2f}'.format(t.monto) }}</td>

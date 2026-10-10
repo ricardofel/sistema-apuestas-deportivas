@@ -13,7 +13,14 @@
   Paleta: slate base, emerald acciones/positivo, amber pendiente, rose negativo.
 
   Las plantillas reciben `usuario` (o nada si no hay sesión) en el contexto.
+  Las fechas se guardan en UTC: mostrarlas con el filtro `| hora_local` (hora de Ecuador).
+  El menú marca la sección activa según la URL; para una sección nueva basta añadir un enlace(...).
 #}
+{% macro enlace(href, texto) %}
+{% set activo = request.url.path == href or request.url.path.startswith(href + "/") %}
+<a href="{{ href }}"{% if activo %} aria-current="page"{% endif %}
+   class="flex items-center h-full border-b-2 text-base font-medium transition {{ 'border-emerald-600 text-emerald-700' if activo else 'border-transparent text-slate-600 hover:text-emerald-700' }}">{{ texto }}</a>
+{% endmacro %}
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-slate-50">
 <head>
@@ -27,28 +34,33 @@
 </head>
 <body class="min-h-full text-slate-700">
   <nav class="bg-white border-b border-slate-200">
-    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-      <div class="flex items-center gap-6">
-        <a href="/" class="font-semibold text-emerald-700">Apuestas</a>
-        <a href="/eventos" class="text-sm hover:text-emerald-700">Eventos</a>
-        {% if usuario %}
-        <a href="/mis-boletos" class="text-sm hover:text-emerald-700">Mis boletos</a>
-        <a href="/billetera" class="text-sm hover:text-emerald-700">Billetera</a>
-        {% if usuario.rol == "ADMIN" %}
-        <a href="/admin" class="text-sm hover:text-emerald-700">Admin</a>
-        {% endif %}
-        {% endif %}
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-8 h-full">
+        <a href="/" class="flex items-center gap-2 text-xl font-bold text-slate-900">
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white text-base">A</span>
+          Apuestas
+        </a>
+        <div class="flex items-stretch gap-6 h-full">
+          {{ enlace("/eventos", "Eventos") }}
+          {% if usuario %}
+          {{ enlace("/mis-boletos", "Mis boletos") }}
+          {{ enlace("/billetera", "Billetera") }}
+          {% if usuario.rol == "ADMIN" %}
+          {{ enlace("/admin", "Admin") }}
+          {% endif %}
+          {% endif %}
+        </div>
       </div>
-      <div class="flex items-center gap-4 text-sm">
+      <div class="flex items-center gap-3">
         {% if usuario %}
         {% include "billetera/_saldo_nav.html" %}
-        <span class="text-slate-500">{{ usuario.nombre_usuario }}</span>
+        <span class="text-slate-600 font-medium">{{ usuario.nombre_usuario }}</span>
         <form method="post" action="/logout">
-          <button type="submit" class="hover:text-emerald-700">Salir</button>
+          <button type="submit" class="border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium px-4 py-2 rounded-lg transition">Salir</button>
         </form>
         {% else %}
-        <a href="/login" class="hover:text-emerald-700">Iniciar sesión</a>
-        <a href="/registro" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1.5 rounded-lg transition">Registrarse</a>
+        <a href="/login" class="border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-semibold px-5 py-2 rounded-lg transition">Iniciar sesión</a>
+        <a href="/registro" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2 rounded-lg transition">Registrarse</a>
         {% endif %}
       </div>
     </div>
