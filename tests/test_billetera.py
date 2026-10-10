@@ -11,10 +11,7 @@ from app.db.enums import RolUsuario, TipoTransaccion
 from app.modules.billetera import service
 from app.modules.billetera.models import Transaccion
 from app.modules.usuarios import service as usuarios_service
-<<<<<<< HEAD
 from tests.factories import crear_boleto
-=======
->>>>>>> origin/RicardoE
 
 
 @pytest.fixture()
@@ -27,14 +24,11 @@ def admin(db):
     return usuarios_service.crear_usuario(db, "admin@correo.com", "admin", "secreta123", RolUsuario.ADMIN)
 
 
-<<<<<<< HEAD
 @pytest.fixture()
 def boleto(db, ana):
     return crear_boleto(db, ana)
 
 
-=======
->>>>>>> origin/RicardoE
 def _headers(usuario) -> dict:
     return {"Authorization": f"Bearer {crear_token_acceso(usuario.id)}"}
 
@@ -58,36 +52,22 @@ class TestModelo:
 
 
 class TestServicio:
-<<<<<<< HEAD
     def test_acreditar_suma_saldo_y_registra_la_transaccion(self, db, ana, boleto):
         transaccion = service.acreditar(
             db, ana.id, Decimal("50.00"), TipoTransaccion.PREMIO, boleto.id, "Premio"
-=======
-    def test_acreditar_suma_saldo_y_registra_la_transaccion(self, db, ana):
-        transaccion = service.acreditar(
-            db, ana.id, Decimal("50.00"), TipoTransaccion.PREMIO, uuid4(), "Premio"
->>>>>>> origin/RicardoE
         )
         assert ana.saldo == Decimal("50.00")
         assert transaccion.monto == Decimal("50.00")
         assert transaccion.saldo_posterior == Decimal("50.00")
         assert transaccion.tipo == TipoTransaccion.PREMIO
 
-<<<<<<< HEAD
     def test_debitar_guarda_el_monto_negativo(self, db, ana, boleto):
         _cargar(db, ana)
         transaccion = service.debitar(db, ana.id, Decimal("10.00"), boleto.id, "Apuesta")
-=======
-    def test_debitar_guarda_el_monto_negativo(self, db, ana):
-        _cargar(db, ana)
-        boleto_id = uuid4()
-        transaccion = service.debitar(db, ana.id, Decimal("10.00"), boleto_id, "Apuesta")
->>>>>>> origin/RicardoE
         assert ana.saldo == Decimal("90.00")
         assert transaccion.monto == Decimal("-10.00")
         assert transaccion.saldo_posterior == Decimal("90.00")
         assert transaccion.tipo == TipoTransaccion.APUESTA
-<<<<<<< HEAD
         assert transaccion.boleto_id == boleto.id
 
     def test_debitar_todo_el_saldo_es_valido(self, db, ana, boleto):
@@ -99,19 +79,6 @@ class TestServicio:
         _cargar(db, ana, "10.00")
         with pytest.raises(HTTPException) as error:
             service.debitar(db, ana.id, Decimal("10.01"), boleto.id, "Apuesta")
-=======
-        assert transaccion.boleto_id == boleto_id
-
-    def test_debitar_todo_el_saldo_es_valido(self, db, ana):
-        _cargar(db, ana, "10.00")
-        service.debitar(db, ana.id, Decimal("10.00"), uuid4(), "Apuesta")
-        assert ana.saldo == Decimal("0.00")
-
-    def test_saldo_insuficiente_devuelve_400_y_no_cambia_nada(self, db, ana):
-        _cargar(db, ana, "10.00")
-        with pytest.raises(HTTPException) as error:
-            service.debitar(db, ana.id, Decimal("10.01"), uuid4(), "Apuesta")
->>>>>>> origin/RicardoE
         assert error.value.status_code == 400
         assert ana.saldo == Decimal("10.00")
         assert db.scalar(select(func.count()).select_from(Transaccion)) == 1
@@ -137,32 +104,18 @@ class TestServicio:
         _cargar(db, ana, "0.20")
         assert ana.saldo == Decimal("0.30")
 
-<<<<<<< HEAD
     def test_la_suma_de_montos_siempre_iguala_el_saldo(self, db, ana, boleto):
         _cargar(db, ana, "100.00")
         service.debitar(db, ana.id, Decimal("33.33"), boleto.id, "Apuesta")
         service.acreditar(db, ana.id, Decimal("12.50"), TipoTransaccion.PREMIO, None, "Premio")
         service.debitar(db, ana.id, Decimal("0.07"), boleto.id, "Apuesta")
-=======
-    def test_la_suma_de_montos_siempre_iguala_el_saldo(self, db, ana):
-        _cargar(db, ana, "100.00")
-        service.debitar(db, ana.id, Decimal("33.33"), uuid4(), "Apuesta")
-        service.acreditar(db, ana.id, Decimal("12.50"), TipoTransaccion.PREMIO, None, "Premio")
-        service.debitar(db, ana.id, Decimal("0.07"), uuid4(), "Apuesta")
->>>>>>> origin/RicardoE
         db.commit()
         suma = sum(t.monto for t in db.scalars(select(Transaccion)))
         assert suma == ana.saldo == Decimal("79.10")
 
-<<<<<<< HEAD
     def test_debitar_y_acreditar_no_hacen_commit(self, db, ana, boleto):
         _cargar(db, ana, "100.00")
         service.debitar(db, ana.id, Decimal("40.00"), boleto.id, "Apuesta")
-=======
-    def test_debitar_y_acreditar_no_hacen_commit(self, db, ana):
-        _cargar(db, ana, "100.00")
-        service.debitar(db, ana.id, Decimal("40.00"), uuid4(), "Apuesta")
->>>>>>> origin/RicardoE
         db.rollback()
         db.refresh(ana)
         assert ana.saldo == Decimal("100.00")
@@ -195,15 +148,9 @@ class TestApi:
         respuesta = client.get("/api/billetera/saldo", headers=_headers(ana))
         assert respuesta.json() == {"saldo": "15.50"}
 
-<<<<<<< HEAD
     def test_historial_de_transacciones(self, client, db, ana, boleto):
         _cargar(db, ana, "10.00")
         service.debitar(db, ana.id, Decimal("4.00"), boleto.id, "Apuesta")
-=======
-    def test_historial_de_transacciones(self, client, db, ana):
-        _cargar(db, ana, "10.00")
-        service.debitar(db, ana.id, Decimal("4.00"), uuid4(), "Apuesta")
->>>>>>> origin/RicardoE
         db.commit()
         respuesta = client.get("/api/billetera/transacciones?limite=1", headers=_headers(ana))
         cuerpo = respuesta.json()

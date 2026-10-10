@@ -21,11 +21,7 @@ class Transaccion(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     usuario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"), index=True)
-<<<<<<< HEAD
     boleto_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("boletos.id"), nullable=True)
-=======
-    boleto_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
->>>>>>> origin/RicardoE
     tipo: Mapped[TipoTransaccion] = mapped_column(
         Enum(TipoTransaccion, native_enum=False, create_constraint=True, name="tipo_transaccion")
     )

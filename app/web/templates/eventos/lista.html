@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block titulo %}Eventos{% endblock %}
+
+{% block contenido %}
+<h1 class="text-2xl font-semibold text-slate-900">Eventos disponibles</h1>
+<p class="text-sm text-slate-500 mt-1">Elige un resultado para ver su cuota.</p>
+
+<div id="contenido-eventos" class="mt-6">
+  {% include "eventos/_lista.html" %}
+</div>
+{% endblock %}
