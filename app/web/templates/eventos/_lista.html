@@ -1,0 +1,48 @@
+{% set chip = "text-sm px-4 py-1.5 rounded-full border transition" %}
+{% set chip_activo = "bg-emerald-600 border-emerald-600 text-white" %}
+{% set chip_inactivo = "bg-white border-slate-300 text-slate-700 hover:border-emerald-600 hover:text-emerald-700" %}
+
+<div id="contenido-eventos-interno">
+  <div class="flex flex-wrap gap-2">
+    <a href="/eventos" hx-get="/eventos" hx-target="#contenido-eventos" hx-push-url="true"
+       class="{{ chip }} {{ chip_activo if deporte_activo is none else chip_inactivo }}">Todos</a>
+    {% for d in deportes %}
+    <a href="/eventos?deporte={{ d.id }}" hx-get="/eventos?deporte={{ d.id }}" hx-target="#contenido-eventos" hx-push-url="true"
+       class="{{ chip }} {{ chip_activo if deporte_activo == d.id else chip_inactivo }}">{{ d.nombre }}</a>
+    {% endfor %}
+  </div>
+
+  {% if eventos %}
+  <div class="mt-6 grid gap-4 sm:grid-cols-2">
+    {% for evento in eventos %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div class="flex items-center justify-between">
+        <span class="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded-full">{{ evento.deporte.nombre }}</span>
+        <span class="text-sm text-slate-500">{{ evento.inicia_en | hora_local }}</span>
+      </div>
+
+      <p class="mt-4 text-lg font-semibold text-slate-900">
+        {{ evento.equipo_local }} <span class="text-slate-400 font-normal">vs</span> {{ evento.equipo_visitante }}
+      </p>
+
+      <div class="mt-4 flex gap-2">
+        {% for clave, etiqueta in [("LOCAL", "Local"), ("EMPATE", "Empate"), ("VISITANTE", "Visitante")] %}
+        {% set cuota = evento.cuotas | selectattr("seleccion.value", "equalto", clave) | selectattr("activa") | first %}
+        {% if cuota %}
+        <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center">
+          <p class="text-xs text-slate-500">{{ etiqueta }}</p>
+          <p class="font-semibold text-emerald-700">{{ cuota.valor }}</p>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
+    <p class="text-slate-900 font-medium">No hay eventos disponibles por ahora</p>
+    <p class="text-sm text-slate-500 mt-1">Vuelve más tarde o prueba con otro deporte.</p>
+  </div>
+  {% endif %}
+</div>

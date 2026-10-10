@@ -18,3 +18,7 @@ def configurar_sqlite(dbapi_connection, connection_record):
 
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+# Las llaves foráneas entre módulos (ej. transacciones -> boletos) solo se resuelven si todos
+# los modelos están importados; hacerlo aquí cubre al servidor y a los scripts.
+import app.db.registry  # noqa: E402, F401
