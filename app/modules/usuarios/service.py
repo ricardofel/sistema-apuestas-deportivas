@@ -1,7 +1,8 @@
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -49,6 +50,27 @@ def crear_usuario(
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "El email o el nombre de usuario ya existen")
     return usuario
+
+
+def modificar_saldo(db: Session, usuario_id: UUID, delta: Decimal) -> Decimal:
+    """Suma `delta` al saldo (negativo para restar) en un único UPDATE atómico.
+
+    La condición `saldo + delta >= 0` va dentro del propio UPDATE, así dos peticiones
+    simultáneas no pueden gastar el mismo saldo. No hace commit: lo hace quien llama.
+    """
+    nuevo_saldo = Usuario.saldo + delta
+    saldo = db.execute(
+        update(Usuario)
+        .where(Usuario.id == usuario_id, nuevo_saldo >= 0)
+        .values(saldo=nuevo_saldo)
+        .returning(Usuario.saldo)
+        .execution_options(synchronize_session="fetch")
+    ).scalar_one_or_none()
+    if saldo is None:
+        if db.get(Usuario, usuario_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Saldo insuficiente")
+    return saldo
 
 
 def autenticar(db: Session, email: str, password: str) -> Usuario:
