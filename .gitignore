@@ -11,12 +11,14 @@ __pycache__/
 .env
 .envrc
 
-# Base de datos local
+# Base de datos local (SQLite, incluye archivos generados por el modo WAL)
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 
-# Alembic (versiones generadas localmente si aplica)
-# alembic/versions/
+# CSS generado por Tailwind
+static/css/app.css
 
 # Pytest / cobertura
 .pytest_cache/
