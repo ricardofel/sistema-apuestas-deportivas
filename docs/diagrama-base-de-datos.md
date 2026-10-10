@@ -2,7 +2,7 @@
 
 Siete tablas, SQLite. El diagrama usa Mermaid (se renderiza en GitHub y en VS Code con la extensión de Mermaid).
 
-Los tipos `decimal` son lógicamente `NUMERIC(p,s)`, pero en SQLite se implementan con el `TypeDecorator` `Dinero` (texto con precisión de 2 decimales). Ver [Consideraciones de SQLite](#consideraciones-de-sqlite).
+Los tipos `decimal` son lógicamente `NUMERIC(p,s)`, pero en SQLite se implementan con el `TypeDecorator` `Dinero`: `Decimal` en Python y **centavos enteros** en la base. Ver [Consideraciones de SQLite](#consideraciones-de-sqlite).
 
 ## Diagrama entidad-relación
 
@@ -118,7 +118,7 @@ erDiagram
 ## Consideraciones de SQLite
 
 1. **Llaves foráneas desactivadas por defecto:** activar `PRAGMA foreign_keys=ON` en cada conexión (listener en `app/db/session.py`).
-2. **Sin tipo decimal nativo:** columnas de dinero con `TypeDecorator` `Dinero` (`app/db/types.py`).
+2. **Sin tipo decimal nativo:** columnas de dinero con `TypeDecorator` `Dinero` (`app/db/types.py`), que guarda centavos enteros. Los `CHECK` se escriben en centavos (`valor > 100` equivale a una cuota mayor a 1.00). Se evitó guardar texto porque SQLite lo compara como cadena y los `CHECK`, el orden y los `SUM` dejan de ser confiables.
 3. **Sin bloqueo de filas:** `with_for_update()` se ignora; SQLite serializa escrituras bloqueando toda la base. Se mantiene en el código por portabilidad a PostgreSQL. Activar `PRAGMA journal_mode=WAL` y `timeout` de 15 s.
 4. **Alembic en modo batch:** `render_as_batch=True` en `alembic/env.py` y `op.batch_alter_table()` en las migraciones.
 
@@ -126,7 +126,7 @@ erDiagram
 |---|---|
 | UUID | `sqlalchemy.Uuid` (CHAR(32)) |
 | SERIAL | `Integer, primary_key=True, autoincrement=True` |
-| NUMERIC(p,s) | `Dinero` (TypeDecorator sobre `String(20)`) |
+| NUMERIC(p,s) | `Dinero` (TypeDecorator sobre `Integer`, centavos) |
 | ENUM | `sqlalchemy.Enum` (VARCHAR + CHECK) |
 | TIMESTAMP | `DateTime` |
 | BOOLEAN | `Boolean` (INTEGER 0/1) |

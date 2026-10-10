@@ -1,0 +1,58 @@
+{#
+  Convenciones de estilo (usar siempre estas clases para que las tres interfaces se vean igual):
+  Contenedor de página : max-w-5xl mx-auto px-4 py-8
+  Tarjeta              : bg-white rounded-xl shadow-sm border border-slate-200 p-6
+  Botón primario       : bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition
+  Botón secundario     : bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition
+  Input                : w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none
+  Título de sección    : text-2xl font-semibold text-slate-900
+  Texto secundario     : text-sm text-slate-500
+  Badge pendiente      : bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full
+  Badge ganado         : bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full
+  Badge perdido        : bg-rose-100 text-rose-800 text-xs px-2 py-1 rounded-full
+  Paleta: slate base, emerald acciones/positivo, amber pendiente, rose negativo.
+
+  Las plantillas reciben `usuario` (o nada si no hay sesión) en el contexto.
+#}
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block titulo %}Portal de Apuestas{% endblock %}</title>
+  {# Desarrollo: CDN. Para la entrega final reemplazar por <link rel="stylesheet" href="/static/css/app.css"> (ver README). #}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="min-h-full text-slate-700">
+  <nav class="bg-white border-b border-slate-200">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <a href="/" class="font-semibold text-emerald-700">Apuestas</a>
+        <a href="/eventos" class="text-sm hover:text-emerald-700">Eventos</a>
+        {% if usuario %}
+        <a href="/mis-boletos" class="text-sm hover:text-emerald-700">Mis boletos</a>
+        <a href="/billetera" class="text-sm hover:text-emerald-700">Billetera</a>
+        {% if usuario.rol == "ADMIN" %}
+        <a href="/admin" class="text-sm hover:text-emerald-700">Admin</a>
+        {% endif %}
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-4 text-sm">
+        {% if usuario %}
+        <span id="saldo-nav" class="font-medium text-slate-900">{{ usuario.saldo }} créditos</span>
+        <span class="text-slate-500">{{ usuario.nombre_usuario }}</span>
+        {% else %}
+        <a href="/login" class="hover:text-emerald-700">Iniciar sesión</a>
+        <a href="/registro" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1.5 rounded-lg transition">Registrarse</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-8">
+    {% block contenido %}{% endblock %}
+  </main>
+</body>
+</html>
