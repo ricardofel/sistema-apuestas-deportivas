@@ -100,7 +100,7 @@ def describir_boletos(db: Session, boletos: list[Boleto]) -> list[BoletoOut]:
     Pide todas las cuotas de golpe (una sola consulta para toda la lista).
     """
     ids = {s.cuota_id for b in boletos for s in b.selecciones}
-    cuotas = catalogo_service.obtener_cuotas(db, ids)
+    cuotas = catalogo_service.obtener_cuotas(db, ids) if ids else {}
     return [
         BoletoOut(
             id=b.id,
