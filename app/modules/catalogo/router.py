@@ -7,6 +7,7 @@ from app.core.dependencies import get_db, requiere_admin
 from app.db.enums import EstadoEvento
 from app.modules.catalogo import service
 from app.modules.catalogo.schemas import (
+    CancelacionEventoOut,
     CuotaEditarIn,
     CuotaOut,
     CuotasIn,
@@ -15,7 +16,11 @@ from app.modules.catalogo.schemas import (
     EventoEditarIn,
     EventoIn,
     EventoOut,
+    LiquidacionOut,
     Pagina,
+    ReembolsoOut,
+    ResultadoEventoOut,
+    ResultadoIn,
 )
 
 router = APIRouter(tags=["Catálogo"])
@@ -89,3 +94,23 @@ def crear_cuotas(evento_id: uuid.UUID, datos: CuotasIn, db: Session = Depends(ge
 )
 def editar_cuota(cuota_id: uuid.UUID, datos: CuotaEditarIn, db: Session = Depends(get_db)):
     return service.editar_cuota(db, cuota_id, datos)
+
+
+@router.post(
+    "/admin/eventos/{evento_id}/resultado",
+    response_model=ResultadoEventoOut,
+    dependencies=[Depends(requiere_admin)],
+)
+def registrar_resultado(evento_id: uuid.UUID, datos: ResultadoIn, db: Session = Depends(get_db)):
+    evento, resumen = service.registrar_resultado(db, evento_id, datos.resultado)
+    return ResultadoEventoOut(evento=evento, liquidacion=LiquidacionOut(**resumen))
+
+
+@router.post(
+    "/admin/eventos/{evento_id}/cancelar",
+    response_model=CancelacionEventoOut,
+    dependencies=[Depends(requiere_admin)],
+)
+def cancelar_evento(evento_id: uuid.UUID, db: Session = Depends(get_db)):
+    evento, resumen = service.cancelar_evento(db, evento_id)
+    return CancelacionEventoOut(evento=evento, reembolsos=ReembolsoOut(**resumen))

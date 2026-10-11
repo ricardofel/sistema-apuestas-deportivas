@@ -259,3 +259,107 @@ class TestAdminCuotas:
     def test_cuota_inexistente_404(self, client, cab_admin):
         respuesta = client.patch(f"/api/admin/cuotas/{uuid.uuid4()}", json={"activa": False}, headers=cab_admin)
         assert respuesta.status_code == 404
+
+
+RESUMEN_LIQUIDACION = {
+    "selecciones_acertadas": 2,
+    "selecciones_fallidas": 1,
+    "boletos_ganados": 1,
+    "boletos_perdidos": 1,
+    "boletos_pendientes": 0,
+    "premios_acreditados": Decimal("30.00"),
+}
+RESUMEN_CANCELACION = {
+    "selecciones_anuladas": 2,
+    "boletos_recalculados": 1,
+    "boletos_reembolsados": 1,
+    "monto_reembolsado": Decimal("10.00"),
+}
+
+
+@pytest.fixture()
+def liquidacion(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.apuestas.liquidacion.liquidar_evento", lambda db, evento_id: RESUMEN_LIQUIDACION, raising=False
+    )
+    monkeypatch.setattr(
+        "app.modules.apuestas.liquidacion.procesar_cancelacion_evento",
+        lambda db, evento_id: RESUMEN_CANCELACION,
+        raising=False,
+    )
+
+
+def _evento_con_cuotas(db, **campos):
+    evento = crear_evento(db, **campos)
+    crear_cuota(db, evento, TipoSeleccion.LOCAL, Decimal("2.00"))
+    crear_cuota(db, evento, TipoSeleccion.VISITANTE, Decimal("3.00"))
+    return evento
+
+
+class TestPermisosCierre:
+    @pytest.mark.parametrize("accion", ["resultado", "cancelar"])
+    def test_sin_token_401(self, client, accion):
+        assert client.post(f"/api/admin/eventos/{uuid.uuid4()}/{accion}", json={"resultado": "LOCAL"}).status_code == 401
+
+    @pytest.mark.parametrize("accion", ["resultado", "cancelar"])
+    def test_usuario_comun_403(self, client, cab_usuario, accion):
+        ruta = f"/api/admin/eventos/{uuid.uuid4()}/{accion}"
+        assert client.post(ruta, json={"resultado": "LOCAL"}, headers=cab_usuario).status_code == 403
+
+
+class TestResultado:
+    def test_registra_el_resultado_y_devuelve_la_liquidacion(self, client, db, cab_admin, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = client.post(
+            f"/api/admin/eventos/{evento.id}/resultado", json={"resultado": "LOCAL"}, headers=cab_admin
+        )
+        assert respuesta.status_code == 200
+        cuerpo = respuesta.json()
+        assert cuerpo["evento"]["estado"] == "FINALIZADO" and cuerpo["evento"]["resultado"] == "LOCAL"
+        assert cuerpo["liquidacion"]["boletos_ganados"] == 1
+        assert cuerpo["liquidacion"]["premios_acreditados"] == "30.00"
+
+    def test_resultado_invalido_422(self, client, db, cab_admin, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = client.post(
+            f"/api/admin/eventos/{evento.id}/resultado", json={"resultado": "GANA"}, headers=cab_admin
+        )
+        assert respuesta.status_code == 422
+
+    def test_resultado_sin_cuota_400(self, client, db, cab_admin, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = client.post(
+            f"/api/admin/eventos/{evento.id}/resultado", json={"resultado": "EMPATE"}, headers=cab_admin
+        )
+        assert (respuesta.status_code, respuesta.json()["detail"]) == (400, "El resultado no es válido para este evento")
+
+    def test_evento_cerrado_400(self, client, db, cab_admin, liquidacion):
+        evento = _evento_con_cuotas(db, estado=EstadoEvento.FINALIZADO)
+        respuesta = client.post(
+            f"/api/admin/eventos/{evento.id}/resultado", json={"resultado": "LOCAL"}, headers=cab_admin
+        )
+        assert (respuesta.status_code, respuesta.json()["detail"]) == (400, "El evento ya fue cerrado")
+
+    def test_evento_inexistente_404(self, client, cab_admin, liquidacion):
+        respuesta = client.post(
+            f"/api/admin/eventos/{uuid.uuid4()}/resultado", json={"resultado": "LOCAL"}, headers=cab_admin
+        )
+        assert respuesta.status_code == 404
+
+
+class TestCancelar:
+    def test_cancela_y_devuelve_los_reembolsos(self, client, db, cab_admin, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = client.post(f"/api/admin/eventos/{evento.id}/cancelar", headers=cab_admin)
+        assert respuesta.status_code == 200
+        cuerpo = respuesta.json()
+        assert cuerpo["evento"]["estado"] == "CANCELADO"
+        assert cuerpo["reembolsos"]["boletos_reembolsados"] == 1
+        assert cuerpo["reembolsos"]["monto_reembolsado"] == "10.00"
+
+    def test_evento_cerrado_400(self, client, db, cab_admin, liquidacion):
+        evento = _evento_con_cuotas(db, estado=EstadoEvento.CANCELADO)
+        assert client.post(f"/api/admin/eventos/{evento.id}/cancelar", headers=cab_admin).status_code == 400
+
+    def test_evento_inexistente_404(self, client, cab_admin, liquidacion):
+        assert client.post(f"/api/admin/eventos/{uuid.uuid4()}/cancelar", headers=cab_admin).status_code == 404
