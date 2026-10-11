@@ -263,3 +263,13 @@ def cancelar_evento(db: Session, evento_id: UUID) -> tuple[Evento, dict]:
         db.rollback()
         raise
     return obtener_detalle_evento(db, evento.id, solo_cuotas_activas=False), resumen
+
+
+def contar_eventos_por_estado(db: Session) -> dict[EstadoEvento, int]:
+    """Cantidad de eventos por estado; los estados sin eventos cuentan 0."""
+    filas = dict(db.execute(select(Evento.estado, func.count()).group_by(Evento.estado)).all())
+    return {estado: filas.get(estado, 0) for estado in EstadoEvento}
+
+
+def contar_deportes(db: Session) -> int:
+    return db.scalar(select(func.count()).select_from(Deporte).where(Deporte.activo.is_(True))) or 0

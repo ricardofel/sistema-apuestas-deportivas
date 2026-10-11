@@ -279,3 +279,27 @@ class TestEditarCuota:
 
         assert seleccion.cuota_congelada == Decimal("2.00")
         assert visitante.valor == Decimal("3.00")
+
+
+class TestContadores:
+    def test_cuenta_los_eventos_por_estado_con_ceros(self, db):
+        deporte = crear_deporte(db)
+        crear_evento(db, deporte)
+        crear_evento(db, deporte)
+        crear_evento(db, deporte, estado=EstadoEvento.CANCELADO)
+        assert service.contar_eventos_por_estado(db) == {
+            EstadoEvento.PROGRAMADO: 2,
+            EstadoEvento.EN_VIVO: 0,
+            EstadoEvento.FINALIZADO: 0,
+            EstadoEvento.CANCELADO: 1,
+        }
+
+    def test_sin_eventos_todo_es_cero(self, db):
+        assert set(service.contar_eventos_por_estado(db).values()) == {0}
+
+    def test_cuenta_solo_los_deportes_activos(self, db):
+        crear_deporte(db, "Fútbol")
+        inactivo = crear_deporte(db, "Esgrima")
+        inactivo.activo = False
+        db.commit()
+        assert service.contar_deportes(db) == 1
