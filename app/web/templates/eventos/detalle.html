@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "eventos/_cuotas.html" import cuotas %}
+
+{% block titulo %}{{ evento.equipo_local }} vs {{ evento.equipo_visitante }}{% endblock %}
+
+{% block contenido %}
+{% set estados = {
+  "PROGRAMADO": ("Programado", "bg-amber-100 text-amber-800"),
+  "EN_VIVO": ("En vivo", "bg-amber-100 text-amber-800"),
+  "FINALIZADO": ("Finalizado", "bg-emerald-100 text-emerald-800"),
+  "CANCELADO": ("Cancelado", "bg-rose-100 text-rose-800"),
+} %}
+{% set etiqueta_estado, clase_estado = estados[evento.estado.value] %}
+
+<a href="/eventos" class="text-sm text-slate-500 hover:text-emerald-700 transition">&larr; Todos los eventos</a>
+
+<div class="mt-4{% if usuario %} grid gap-6 lg:grid-cols-3{% endif %}">
+  <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <div class="flex items-center justify-between">
+      <span class="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded-full">{{ evento.deporte.nombre }}</span>
+      <span class="{{ clase_estado }} text-xs px-2 py-1 rounded-full">{{ etiqueta_estado }}</span>
+    </div>
+
+    <h1 class="mt-6 text-3xl font-semibold text-slate-900">
+      {{ evento.equipo_local }} <span class="text-slate-400 font-normal">vs</span> {{ evento.equipo_visitante }}
+    </h1>
+    <p class="mt-2 text-sm text-slate-500">Inicia el {{ evento.inicia_en | hora_local }} (hora de Ecuador)</p>
+
+    {% if evento.estado.value == "FINALIZADO" %}
+    <div class="mt-6 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+      <p class="text-sm text-slate-500">Resultado</p>
+      <p class="text-lg font-semibold text-emerald-800">
+        {% if evento.resultado.value == "LOCAL" %}Gana {{ evento.equipo_local }}
+        {% elif evento.resultado.value == "VISITANTE" %}Gana {{ evento.equipo_visitante }}
+        {% else %}Empate{% endif %}
+      </p>
+    </div>
+    {% elif evento.estado.value == "CANCELADO" %}
+    <p class="mt-6 bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg px-4 py-3">
+      Este evento fue cancelado. Las apuestas se reembolsan.
+    </p>
+    {% endif %}
+
+    <h2 class="mt-8 text-sm font-medium text-slate-500">Cuotas</h2>
+    <div class="mt-2">
+      {% if evento.cuotas %}
+      {{ cuotas(evento, usuario, apostable) }}
+      {% else %}
+      <p class="text-sm text-slate-500">Este evento todavía no tiene cuotas disponibles.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if usuario %}
+  <aside class="lg:col-span-1">
+    <div id="panel-boleto" hx-get="/web/boleto/panel" hx-trigger="load"></div>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

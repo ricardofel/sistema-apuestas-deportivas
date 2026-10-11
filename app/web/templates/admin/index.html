@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block titulo %}Administración{% endblock %}
+
+{% block contenido %}
+{% set contadores = [
+  ("PROGRAMADO", "Programados", "border-amber-300 bg-amber-50", "text-amber-800"),
+  ("EN_VIVO", "En vivo", "border-amber-300 bg-amber-50", "text-amber-800"),
+  ("FINALIZADO", "Finalizados", "border-emerald-300 bg-emerald-50", "text-emerald-800"),
+  ("CANCELADO", "Cancelados", "border-rose-300 bg-rose-50", "text-rose-800"),
+] %}
+
+<h1 class="text-2xl font-semibold text-slate-900">Panel de administración</h1>
+<p class="text-sm text-slate-500 mt-1">Catálogo deportivo y saldo de los usuarios.</p>
+
+<section class="mt-8" aria-labelledby="titulo-eventos">
+  <div class="flex items-end justify-between">
+    <h2 id="titulo-eventos" class="text-sm font-medium text-slate-500">Eventos por estado</h2>
+    <a href="/admin/eventos" class="text-sm font-medium text-emerald-700 hover:text-emerald-800 transition">Gestionar eventos &rarr;</a>
+  </div>
+  <div class="mt-3 grid gap-4 grid-cols-2 lg:grid-cols-4">
+    {% for clave, etiqueta, caja, texto in contadores %}
+    <a href="/admin/eventos?estado={{ clave }}" class="rounded-xl border p-5 transition hover:shadow-sm {{ caja }}">
+      <p class="text-4xl font-semibold {{ texto }}">{{ eventos_por_estado[clave] }}</p>
+      <p class="mt-1 text-sm {{ texto }}">{{ etiqueta }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Accesos">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <p class="text-sm text-slate-500">Deportes activos</p>
+    <p class="mt-1 text-3xl font-semibold text-slate-900">{{ total_deportes }}</p>
+    <a href="/admin/eventos" class="mt-4 inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Crear deporte o evento</a>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <p class="text-sm text-slate-500">Usuarios</p>
+    <p class="mt-1 text-lg font-semibold text-slate-900">Recarga de saldo</p>
+    <a href="/admin/billetera" class="mt-4 inline-block bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Ir a billetera</a>
+  </div>
+</section>
+{% endblock %}

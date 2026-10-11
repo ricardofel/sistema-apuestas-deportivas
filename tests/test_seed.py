@@ -1,8 +1,12 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 
+from app.db.enums import EstadoEvento, TipoSeleccion
+from app.modules.catalogo import service as catalogo_service
 from app.modules.catalogo.models import Cuota, Deporte, Evento
 from scripts import seed
 from tests.factories import crear_boleto, crear_cuota
@@ -63,3 +67,37 @@ def test_reiniciar_no_borra_si_hay_boletos_que_dependen(db):
 
     assert seed.reiniciar(db) is False
     assert _contar(db, Evento) == len(seed.PARTIDOS)
+
+
+def test_cada_evento_tiene_local_y_visitante_y_el_empate_solo_en_futbol(db):
+    seed.cargar(db)
+    for evento in db.scalars(select(Evento)):
+        selecciones = {c.seleccion for c in evento.cuotas}
+        assert {TipoSeleccion.LOCAL, TipoSeleccion.VISITANTE} <= selecciones
+        assert (TipoSeleccion.EMPATE in selecciones) == (evento.deporte.nombre == "Fútbol")
+
+
+def test_todas_las_cuotas_cumplen_el_contrato_para_apostar(db):
+    seed.cargar(db)
+    for cuota in db.scalars(select(Cuota)):
+        validada = catalogo_service.obtener_cuota_para_apuesta(db, cuota.id)
+        assert validada.id == cuota.id and validada.activa
+
+
+def test_el_seed_es_consultable_por_la_api_y_por_el_admin(client, db):
+    seed.cargar(db)
+    pagina = client.get("/api/eventos", params={"limite": 100}).json()
+    assert pagina["total"] == len(seed.PARTIDOS) == len(pagina["items"])
+    _, total_admin = catalogo_service.listar_eventos_paginado(db, solo_cuotas_activas=False)
+    assert total_admin == len(seed.PARTIDOS)
+
+
+def test_los_resultados_posibles_de_cada_evento_son_sus_cuotas(db, monkeypatch):
+    monkeypatch.setattr("app.modules.apuestas.liquidacion.liquidar_evento", lambda db, evento_id: {}, raising=False)
+    seed.cargar(db)
+    tenis = db.scalars(select(Evento).join(Evento.deporte).where(Deporte.nombre == "Tenis")).first()
+    with pytest.raises(HTTPException) as error:
+        catalogo_service.registrar_resultado(db, tenis.id, TipoSeleccion.EMPATE)
+    assert error.value.status_code == 400
+    evento, _ = catalogo_service.registrar_resultado(db, tenis.id, TipoSeleccion.LOCAL)
+    assert evento.estado == EstadoEvento.FINALIZADO

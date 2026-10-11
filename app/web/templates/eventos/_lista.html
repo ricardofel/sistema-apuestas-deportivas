@@ -1,3 +1,4 @@
+{% from "eventos/_cuotas.html" import cuotas %}
 {% set chip = "text-sm px-4 py-1.5 rounded-full border transition" %}
 {% set chip_activo = "bg-emerald-600 border-emerald-600 text-white" %}
 {% set chip_inactivo = "bg-white border-slate-300 text-slate-700 hover:border-emerald-600 hover:text-emerald-700" %}
@@ -21,20 +22,12 @@
         <span class="text-sm text-slate-500">{{ evento.inicia_en | hora_local }}</span>
       </div>
 
-      <p class="mt-4 text-lg font-semibold text-slate-900">
+      <a href="/eventos/{{ evento.id }}" class="mt-4 block text-lg font-semibold text-slate-900 hover:text-emerald-700 transition">
         {{ evento.equipo_local }} <span class="text-slate-400 font-normal">vs</span> {{ evento.equipo_visitante }}
-      </p>
+      </a>
 
-      <div class="mt-4 flex gap-2">
-        {% for clave, etiqueta in [("LOCAL", "Local"), ("EMPATE", "Empate"), ("VISITANTE", "Visitante")] %}
-        {% set cuota = evento.cuotas | selectattr("seleccion.value", "equalto", clave) | selectattr("activa") | first %}
-        {% if cuota %}
-        <div class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center">
-          <p class="text-xs text-slate-500">{{ etiqueta }}</p>
-          <p class="font-semibold text-emerald-700">{{ cuota.valor }}</p>
-        </div>
-        {% endif %}
-        {% endfor %}
+      <div class="mt-4">
+        {{ cuotas(evento, usuario, true) }}
       </div>
     </div>
     {% endfor %}
