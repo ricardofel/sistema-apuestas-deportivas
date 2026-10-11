@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 
-from app.db.enums import EstadoEvento
+from app.db.enums import EstadoEvento, TipoSeleccion
 from app.modules.catalogo.models import Cuota, Deporte, Evento
 from app.modules.catalogo.schemas import CuotaEditarIn, CuotasIn, EventoEditarIn, EventoIn
 
@@ -212,3 +212,54 @@ def editar_cuota(db: Session, cuota_id: UUID, datos: CuotaEditarIn) -> Cuota:
         cuota.activa = datos.activa
     db.commit()
     return cuota
+
+
+ESTADOS_ABIERTOS = (EstadoEvento.PROGRAMADO, EstadoEvento.EN_VIVO)
+
+
+def _obtener_evento_abierto(db: Session, evento_id: UUID) -> Evento:
+    evento = obtener_evento(db, evento_id)
+    if evento.estado not in ESTADOS_ABIERTOS:
+        raise HTTPException(status_code=400, detail="El evento ya fue cerrado")
+    return evento
+
+
+def registrar_resultado(db: Session, evento_id: UUID, resultado: TipoSeleccion) -> tuple[Evento, dict]:
+    """Finaliza el evento y liquida los boletos en una sola transacción.
+
+    Devuelve el evento y el resumen de la liquidación. Si algo falla, el evento no queda FINALIZADO.
+    """
+    # Import perezoso: apuestas.liquidacion importa este módulo (evita el import circular).
+    from app.modules.apuestas import liquidacion
+
+    evento = _obtener_evento_abierto(db, evento_id)
+    selecciones = set(db.scalars(select(Cuota.seleccion).where(Cuota.evento_id == evento.id)))
+    if resultado not in selecciones:
+        raise HTTPException(status_code=400, detail="El resultado no es válido para este evento")
+
+    try:
+        evento.estado = EstadoEvento.FINALIZADO
+        evento.resultado = resultado
+        db.flush()
+        resumen = liquidacion.liquidar_evento(db, evento.id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return obtener_detalle_evento(db, evento.id, solo_cuotas_activas=False), resumen
+
+
+def cancelar_evento(db: Session, evento_id: UUID) -> tuple[Evento, dict]:
+    """Cancela el evento y procesa los reembolsos en una sola transacción."""
+    from app.modules.apuestas import liquidacion
+
+    evento = _obtener_evento_abierto(db, evento_id)
+    try:
+        evento.estado = EstadoEvento.CANCELADO
+        db.flush()
+        resumen = liquidacion.procesar_cancelacion_evento(db, evento.id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return obtener_detalle_evento(db, evento.id, solo_cuotas_activas=False), resumen
