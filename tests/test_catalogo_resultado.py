@@ -4,9 +4,11 @@ from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import update
 
 from app.db.enums import EstadoEvento, TipoSeleccion
 from app.modules.catalogo import service
+from app.modules.catalogo.models import Evento
 from tests.factories import crear_cuota, crear_evento
 
 RUTA_LIQUIDAR = "app.modules.apuestas.liquidacion.liquidar_evento"
@@ -183,3 +185,51 @@ class TestCancelarEvento:
 
         db.expire_all()
         assert service.obtener_evento(db, evento.id).estado == EstadoEvento.PROGRAMADO
+
+
+class TestCierreConcurrente:
+    """Si otro administrador cierra el evento entre la lectura y la escritura, no se liquida dos veces."""
+
+    @staticmethod
+    def _cerrar_en_medio(monkeypatch, nuevo_estado):
+        original = service._obtener_evento_abierto
+
+        def con_cierre_intermedio(db, evento_id):
+            encontrado = original(db, evento_id)
+            db.execute(update(Evento).where(Evento.id == evento_id).values(estado=nuevo_estado))
+            db.commit()
+            return encontrado
+
+        monkeypatch.setattr(service, "_obtener_evento_abierto", con_cierre_intermedio)
+
+    def test_resultado_sobre_un_evento_que_otro_cancelo(self, db, liquidacion, monkeypatch):
+        evento = _evento_con_cuotas(db)
+        self._cerrar_en_medio(monkeypatch, EstadoEvento.CANCELADO)
+        error = _error(service.registrar_resultado, db, evento.id, TipoSeleccion.LOCAL)
+        assert (error.status_code, error.detail) == (400, "El evento ya fue cerrado")
+        assert liquidacion["liquidar"] == []
+        db.expire_all()
+        guardado = service.obtener_evento(db, evento.id)
+        assert (guardado.estado, guardado.resultado) == (EstadoEvento.CANCELADO, None)
+
+    def test_cancelacion_sobre_un_evento_que_otro_finalizo(self, db, liquidacion, monkeypatch):
+        evento = _evento_con_cuotas(db)
+        self._cerrar_en_medio(monkeypatch, EstadoEvento.FINALIZADO)
+        error = _error(service.cancelar_evento, db, evento.id)
+        assert (error.status_code, error.detail) == (400, "El evento ya fue cerrado")
+        assert liquidacion["cancelar"] == []
+        db.expire_all()
+        assert service.obtener_evento(db, evento.id).estado == EstadoEvento.FINALIZADO
+
+    def test_la_liquidacion_ve_el_evento_ya_finalizado(self, db, monkeypatch):
+        evento = _evento_con_cuotas(db)
+        visto = {}
+
+        def liquidar(db, evento_id):
+            actual = service.obtener_evento(db, evento_id)
+            visto.update(estado=actual.estado, resultado=actual.resultado)
+            return {}
+
+        monkeypatch.setattr(RUTA_LIQUIDAR, liquidar, raising=False)
+        service.registrar_resultado(db, evento.id, TipoSeleccion.VISITANTE)
+        assert visto == {"estado": EstadoEvento.FINALIZADO, "resultado": TipoSeleccion.VISITANTE}

@@ -76,10 +76,12 @@
             <button type="submit" class="{{ boton_sec }}">Cambiar valor</button>
           </form>
           {% endif %}
+          {% if programado %}
           <form method="post" action="/admin/cuotas/{{ cuota.id }}/editar">
             <input type="hidden" name="activa" value="{{ 'false' if cuota.activa else 'true' }}">
             <button type="submit" class="{{ boton_sec }}">{{ "Desactivar" if cuota.activa else "Activar" }}</button>
           </form>
+          {% endif %}
         </div>
       </li>
       {% endfor %}

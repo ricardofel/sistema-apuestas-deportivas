@@ -650,3 +650,30 @@ class TestCancelarDesdeLaPantalla:
         respuesta = admin.post(f"/admin/eventos/{evento.id}/cancelar")
         assert respuesta.status_code == 500 and "no se guardó ningún cambio" in respuesta.text
         assert _estado_guardado(db, evento) == (EstadoEvento.PROGRAMADO, None)
+
+
+class TestAjustesDeRevision:
+    def test_fecha_con_zona_horaria_se_rechaza(self, admin, db):
+        deporte = crear_deporte(db)
+        respuesta = admin.post("/admin/eventos", data=_datos_evento(deporte.id, inicia_en="2099-05-20T19:30+00:00"))
+        assert respuesta.status_code == 422 and "Ingresa una fecha de inicio válida" in respuesta.text
+        assert db.query(Evento).count() == 0
+
+    def test_el_select_conserva_el_deporte_inactivo_del_evento(self, admin, db):
+        inactivo = crear_deporte(db, "Esgrima")
+        evento = crear_evento(db, inactivo)
+        inactivo.activo = False
+        crear_deporte(db, "Tenis")
+        db.commit()
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert re.search(rf'<option value="{inactivo.id}" selected>Esgrima</option>', html)
+
+    @pytest.mark.parametrize("estado", [EstadoEvento.FINALIZADO, EstadoEvento.CANCELADO])
+    def test_evento_cerrado_no_ofrece_activar_ni_desactivar(self, admin, db, estado):
+        evento = _evento_con_cuotas(db, estado=estado)
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "Desactivar" not in html and 'name="activa"' not in html
+
+    def test_evento_programado_si_ofrece_desactivar(self, admin, db):
+        evento = _evento_con_cuotas(db)
+        assert "Desactivar" in admin.get(f"/admin/eventos/{evento.id}").text

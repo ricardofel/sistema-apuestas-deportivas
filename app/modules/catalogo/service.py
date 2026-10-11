@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 
@@ -224,6 +224,24 @@ def _obtener_evento_abierto(db: Session, evento_id: UUID) -> Evento:
     return evento
 
 
+def _cerrar_si_sigue_abierto(
+    db: Session, evento: Evento, estado: EstadoEvento, resultado: TipoSeleccion | None = None
+) -> None:
+    """Cierra el evento con un UPDATE condicional al estado.
+
+    Si otro administrador (o un doble clic) lo cerró entre la lectura y este punto, no se toca nada y no se
+    liquida dos veces. Hace flush, no commit: el commit lo hace quien cierra la operación.
+    """
+    filas = db.execute(
+        update(Evento)
+        .where(Evento.id == evento.id, Evento.estado.in_(ESTADOS_ABIERTOS))
+        .values(estado=estado, resultado=resultado)
+    ).rowcount
+    if filas != 1:
+        raise HTTPException(status_code=400, detail="El evento ya fue cerrado")
+    db.refresh(evento)
+
+
 def registrar_resultado(db: Session, evento_id: UUID, resultado: TipoSeleccion) -> tuple[Evento, dict]:
     """Finaliza el evento y liquida los boletos en una sola transacción.
 
@@ -238,9 +256,7 @@ def registrar_resultado(db: Session, evento_id: UUID, resultado: TipoSeleccion) 
         raise HTTPException(status_code=400, detail="El resultado no es válido para este evento")
 
     try:
-        evento.estado = EstadoEvento.FINALIZADO
-        evento.resultado = resultado
-        db.flush()
+        _cerrar_si_sigue_abierto(db, evento, EstadoEvento.FINALIZADO, resultado)
         resumen = liquidacion.liquidar_evento(db, evento.id)
         db.commit()
     except Exception:
@@ -255,8 +271,7 @@ def cancelar_evento(db: Session, evento_id: UUID) -> tuple[Evento, dict]:
 
     evento = _obtener_evento_abierto(db, evento_id)
     try:
-        evento.estado = EstadoEvento.CANCELADO
-        db.flush()
+        _cerrar_si_sigue_abierto(db, evento, EstadoEvento.CANCELADO)
         resumen = liquidacion.procesar_cancelacion_evento(db, evento.id)
         db.commit()
     except Exception:

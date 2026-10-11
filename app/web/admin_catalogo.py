@@ -66,6 +66,8 @@ def _mensaje_validacion(error: ValidationError) -> str:
 def _fecha_ecuador_a_utc(texto: str) -> datetime:
     """`<input type="datetime-local">` entrega hora de Ecuador sin zona; se guarda en UTC (+5 h)."""
     local = datetime.fromisoformat(texto)
+    if local.tzinfo is not None:
+        raise ValueError("La fecha no debe traer zona horaria")
     return local.replace(tzinfo=HORA_ECUADOR).astimezone(UTC).replace(tzinfo=None)
 
 
@@ -224,6 +226,14 @@ def _no_encontrado(request: Request, usuario: Usuario):
     )
 
 
+def _deportes_con_el_del_evento(db: Session, evento) -> list:
+    """Deportes activos más el del evento, aunque ya esté inactivo, para que el select no lo cambie."""
+    deportes = catalogo_service.listar_deportes(db)
+    if all(deporte.id != evento.deporte_id for deporte in deportes):
+        deportes = [evento.deporte, *deportes]
+    return deportes
+
+
 def _pagina_evento(
     request: Request,
     db: Session,
@@ -244,7 +254,7 @@ def _pagina_evento(
     contexto = {
         "usuario": usuario,
         "evento": evento,
-        "deportes": catalogo_service.listar_deportes(db),
+        "deportes": _deportes_con_el_del_evento(db, evento),
         "cuotas": [(seleccion, etiqueta, por_seleccion.get(seleccion)) for seleccion, etiqueta in SELECCIONES],
         "formulario": formulario
         or {
@@ -338,7 +348,11 @@ def cargar_cuotas(
         (TipoSeleccion.VISITANTE, cuota_visitante),
     ]
     # La cuota de empate es opcional: en blanco significa que el deporte no tiene empate.
-    pedidas = [{"seleccion": seleccion, "valor": valor} for seleccion, valor in valores if valor.strip() or seleccion != TipoSeleccion.EMPATE]
+    pedidas = [
+        {"seleccion": seleccion, "valor": valor}
+        for seleccion, valor in valores
+        if valor.strip() or seleccion != TipoSeleccion.EMPATE
+    ]
     try:
         cuotas = catalogo_service.crear_cuotas(db, id_evento, CuotasIn(cuotas=pedidas))
     except ValidationError as error:
