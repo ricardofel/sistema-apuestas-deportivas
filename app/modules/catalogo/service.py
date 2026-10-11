@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 
 from app.db.enums import EstadoEvento
 from app.modules.catalogo.models import Cuota, Deporte, Evento
-from app.modules.catalogo.schemas import EventoEditarIn, EventoIn
+from app.modules.catalogo.schemas import CuotaEditarIn, CuotasIn, EventoEditarIn, EventoIn
 
 
 def _ahora_utc() -> datetime:
@@ -179,3 +179,36 @@ def editar_evento(db: Session, evento_id: UUID, datos: EventoEditarIn) -> Evento
         setattr(evento, campo, valor)
     db.commit()
     return obtener_detalle_evento(db, evento.id, solo_cuotas_activas=False)
+
+
+def crear_cuotas(db: Session, evento_id: UUID, datos: CuotasIn) -> list[Cuota]:
+    evento = obtener_evento(db, evento_id)
+    if evento.estado != EstadoEvento.PROGRAMADO:
+        raise HTTPException(status_code=400, detail="Solo se pueden cargar cuotas a un evento programado")
+
+    existentes = set(db.scalars(select(Cuota.seleccion).where(Cuota.evento_id == evento.id)))
+    repetidas = [c.seleccion.value for c in datos.cuotas if c.seleccion in existentes]
+    if repetidas:
+        raise HTTPException(status_code=409, detail=f"El evento ya tiene cuota para: {', '.join(repetidas)}")
+
+    cuotas = [Cuota(evento_id=evento.id, seleccion=c.seleccion, valor=c.valor) for c in datos.cuotas]
+    db.add_all(cuotas)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="El evento ya tiene cuota para alguna de las selecciones") from None
+    return cuotas
+
+
+def editar_cuota(db: Session, cuota_id: UUID, datos: CuotaEditarIn) -> Cuota:
+    """Edita el valor (solo evento PROGRAMADO) o la activación. Los boletos usan `cuota_congelada`."""
+    cuota = obtener_cuota(db, cuota_id)
+    if datos.valor is not None and cuota.evento.estado != EstadoEvento.PROGRAMADO:
+        raise HTTPException(status_code=400, detail="Solo se puede cambiar el valor de un evento programado")
+    if datos.valor is not None:
+        cuota.valor = datos.valor
+    if datos.activa is not None:
+        cuota.activa = datos.activa
+    db.commit()
+    return cuota

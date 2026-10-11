@@ -7,9 +7,11 @@ import pytest
 from fastapi import HTTPException
 
 from app.db.enums import EstadoEvento, TipoSeleccion
+from app.modules.apuestas.models import Seleccion
 from app.modules.catalogo import service
-from app.modules.catalogo.schemas import EventoEditarIn, EventoIn
-from tests.factories import crear_cuota, crear_deporte, crear_evento
+from app.modules.catalogo.schemas import CuotaEditarIn, CuotasIn, EventoEditarIn, EventoIn
+from app.modules.usuarios import service as usuarios_service
+from tests.factories import crear_boleto, crear_cuota, crear_deporte, crear_evento
 
 
 def _futuro(horas: int = 24) -> datetime:
@@ -189,3 +191,91 @@ class TestEditarEvento:
         editado = service.editar_evento(db, evento.id, EventoEditarIn(equipo_local="Emelec"))
         assert editado.estado == EstadoEvento.PROGRAMADO and editado.resultado is None
         assert [c.valor for c in editado.cuotas] == [Decimal("2.00")]
+
+
+class TestCrearCuotas:
+    @staticmethod
+    def _cuotas_in(*pares) -> CuotasIn:
+        return CuotasIn(cuotas=[{"seleccion": s, "valor": v} for s, v in pares])
+
+    def test_carga_las_cuotas_del_evento(self, db):
+        evento = crear_evento(db)
+        creadas = service.crear_cuotas(
+            db, evento.id, self._cuotas_in(("LOCAL", "2.10"), ("EMPATE", "3.20"), ("VISITANTE", "3.40"))
+        )
+        assert {c.seleccion: c.valor for c in creadas} == {
+            TipoSeleccion.LOCAL: Decimal("2.10"),
+            TipoSeleccion.EMPATE: Decimal("3.20"),
+            TipoSeleccion.VISITANTE: Decimal("3.40"),
+        }
+        assert all(c.activa and c.evento_id == evento.id for c in creadas)
+
+    def test_evento_inexistente_404(self, db):
+        error = _error(service.crear_cuotas, db, uuid.uuid4(), self._cuotas_in(("LOCAL", "2"), ("VISITANTE", "2")))
+        assert (error.status_code, error.detail) == (404, "Evento no encontrado")
+
+    @pytest.mark.parametrize("estado", [EstadoEvento.EN_VIVO, EstadoEvento.FINALIZADO, EstadoEvento.CANCELADO])
+    def test_solo_si_esta_programado_400(self, db, estado):
+        evento = crear_evento(db, estado=estado)
+        error = _error(service.crear_cuotas, db, evento.id, self._cuotas_in(("LOCAL", "2"), ("VISITANTE", "2")))
+        assert (error.status_code, error.detail) == (400, "Solo se pueden cargar cuotas a un evento programado")
+
+    def test_seleccion_ya_existente_409_y_no_guarda_nada(self, db):
+        evento = crear_evento(db)
+        crear_cuota(db, evento, TipoSeleccion.LOCAL)
+        error = _error(service.crear_cuotas, db, evento.id, self._cuotas_in(("LOCAL", "2"), ("VISITANTE", "2")))
+        assert (error.status_code, error.detail) == (409, "El evento ya tiene cuota para: LOCAL")
+        assert [c.seleccion for c in service.obtener_detalle_evento(db, evento.id, False).cuotas] == [
+            TipoSeleccion.LOCAL
+        ]
+
+
+class TestEditarCuota:
+    def test_cambia_el_valor(self, db):
+        cuota = crear_cuota(db, valor=Decimal("2.00"))
+        editada = service.editar_cuota(db, cuota.id, CuotaEditarIn(valor=Decimal("2.75")))
+        assert editada.valor == Decimal("2.75") and editada.activa is True
+
+    def test_desactiva_la_cuota(self, db):
+        cuota = crear_cuota(db)
+        assert service.editar_cuota(db, cuota.id, CuotaEditarIn(activa=False)).activa is False
+
+    def test_puede_reactivarla(self, db):
+        cuota = crear_cuota(db)
+        service.editar_cuota(db, cuota.id, CuotaEditarIn(activa=False))
+        assert service.editar_cuota(db, cuota.id, CuotaEditarIn(activa=True)).activa is True
+
+    def test_inexistente_404(self, db):
+        error = _error(service.editar_cuota, db, uuid.uuid4(), CuotaEditarIn(activa=False))
+        assert (error.status_code, error.detail) == (404, "Cuota no encontrada")
+
+    @pytest.mark.parametrize("estado", [EstadoEvento.EN_VIVO, EstadoEvento.FINALIZADO, EstadoEvento.CANCELADO])
+    def test_no_cambia_el_valor_si_el_evento_no_esta_programado_400(self, db, estado):
+        cuota = crear_cuota(db, crear_evento(db, estado=estado), valor=Decimal("2.00"))
+        error = _error(service.editar_cuota, db, cuota.id, CuotaEditarIn(valor=Decimal("5.00")))
+        assert (error.status_code, error.detail) == (400, "Solo se puede cambiar el valor de un evento programado")
+        db.refresh(cuota)
+        assert cuota.valor == Decimal("2.00")
+
+    def test_activa_si_se_puede_cambiar_en_evento_cerrado(self, db):
+        cuota = crear_cuota(db, crear_evento(db, estado=EstadoEvento.FINALIZADO))
+        assert service.editar_cuota(db, cuota.id, CuotaEditarIn(activa=False)).activa is False
+
+    def test_no_afecta_otras_cuotas_ni_boletos_ya_emitidos(self, db):
+        evento = crear_evento(db)
+        local = crear_cuota(db, evento, TipoSeleccion.LOCAL, Decimal("2.00"))
+        visitante = crear_cuota(db, evento, TipoSeleccion.VISITANTE, Decimal("3.00"))
+        usuario = usuarios_service.crear_usuario(db, "apostador@correo.com", "apostador", "clave-segura-1")
+        boleto = crear_boleto(db, usuario)
+        seleccion = Seleccion(
+            boleto_id=boleto.id, cuota_id=local.id, evento_id=evento.id, cuota_congelada=Decimal("2.00")
+        )
+        db.add(seleccion)
+        db.commit()
+
+        service.editar_cuota(db, local.id, CuotaEditarIn(valor=Decimal("9.99")))
+        db.refresh(seleccion)
+        db.refresh(visitante)
+
+        assert seleccion.cuota_congelada == Decimal("2.00")
+        assert visitante.valor == Decimal("3.00")
