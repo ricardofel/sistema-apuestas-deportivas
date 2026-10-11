@@ -1,0 +1,33 @@
+{#
+  Cuotas de un evento. Cada cuota activa de un evento que acepta apuestas es un botón HTMX que la
+  agrega al boleto (panel de Daniel, ruta /web/boleto/*); sin sesión enlaza a /login.
+  Parámetros: evento, usuario (o none) y apostable (el evento está PROGRAMADO y aún no inicia).
+#}
+{% macro cuotas(evento, usuario, apostable) %}
+{% set base = "flex-1 border rounded-lg px-3 py-2 text-center transition" %}
+{% set vivo = "bg-slate-50 border-slate-200 hover:border-emerald-600 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none" %}
+<div class="flex gap-2">
+  {% for clave, etiqueta in [("LOCAL", "Local"), ("EMPATE", "Empate"), ("VISITANTE", "Visitante")] %}
+  {% set cuota = evento.cuotas | selectattr("seleccion.value", "equalto", clave) | selectattr("activa") | first %}
+  {% if cuota %}
+  {% if apostable and usuario %}
+  <button type="button" hx-post="/web/boleto/agregar/{{ cuota.id }}" hx-target="#panel-boleto" hx-swap="innerHTML"
+          class="{{ base }} {{ vivo }}">
+    <span class="block text-xs text-slate-500">{{ etiqueta }}</span>
+    <span class="block font-semibold text-emerald-700">{{ cuota.valor }}</span>
+  </button>
+  {% elif apostable %}
+  <a href="/login" class="{{ base }} {{ vivo }}">
+    <span class="block text-xs text-slate-500">{{ etiqueta }}</span>
+    <span class="block font-semibold text-emerald-700">{{ cuota.valor }}</span>
+  </a>
+  {% else %}
+  <div class="{{ base }} bg-slate-50 border-slate-200">
+    <span class="block text-xs text-slate-500">{{ etiqueta }}</span>
+    <span class="block font-semibold text-slate-600">{{ cuota.valor }}</span>
+  </div>
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}
