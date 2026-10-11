@@ -1,6 +1,7 @@
 """Pantallas de administración del catálogo (rutas /admin/...). Solo para el rol ADMIN."""
 from datetime import UTC, datetime
 from math import ceil
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -8,9 +9,9 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db, get_usuario_opcional
-from app.db.enums import EstadoEvento, RolUsuario
+from app.db.enums import EstadoEvento, RolUsuario, TipoSeleccion
 from app.modules.catalogo import service as catalogo_service
-from app.modules.catalogo.schemas import DeporteIn, EventoIn
+from app.modules.catalogo.schemas import CuotaEditarIn, CuotasIn, DeporteIn, EventoEditarIn, EventoIn
 from app.modules.usuarios.models import Usuario
 from app.web.templating import HORA_ECUADOR, templates
 
@@ -24,7 +25,14 @@ MENSAJES_VALIDACION = {
     "equipo_visitante": "El equipo visitante debe tener entre 1 y 100 caracteres",
     "inicia_en": "Ingresa una fecha de inicio válida",
     "nombre": "El nombre del deporte debe tener entre 1 y 50 caracteres",
+    "valor": "Cada cuota debe ser un número mayor que 1.00, con hasta 2 decimales",
 }
+
+SELECCIONES = [
+    (TipoSeleccion.LOCAL, "Local"),
+    (TipoSeleccion.EMPATE, "Empate"),
+    (TipoSeleccion.VISITANTE, "Visitante"),
+]
 
 
 def _rechazar_si_no_admin(usuario: Usuario | None) -> RedirectResponse | None:
@@ -39,7 +47,8 @@ def _rechazar_si_no_admin(usuario: Usuario | None) -> RedirectResponse | None:
 def _mensaje_validacion(error: ValidationError) -> str:
     primero = error.errors()[0]
     if primero["loc"]:
-        return MENSAJES_VALIDACION.get(primero["loc"][0], "Los datos ingresados no son válidos")
+        # Para las cuotas, el campo que falla es el último tramo (cuotas.0.valor).
+        return MENSAJES_VALIDACION.get(primero["loc"][-1], "Los datos ingresados no son válidos")
     # Error de varios campos a la vez (ej. equipos iguales): el schema ya trae el mensaje en español.
     return primero["msg"].removeprefix("Value error, ")
 
@@ -185,3 +194,180 @@ def crear_deporte(
     except HTTPException as error:
         return _pagina_eventos(request, db, usuario, nombre_deporte=nombre, error=error.detail, codigo=error.status_code)
     return _pagina_eventos(request, db, usuario, mensaje=f"Deporte creado: {deporte.nombre}")
+
+
+def _uuid_o_none(valor: str) -> UUID | None:
+    try:
+        return UUID(valor)
+    except ValueError:
+        return None
+
+
+def _a_hora_ecuador(valor: datetime) -> str:
+    """Fecha en UTC (sin zona) con el formato que espera `<input type="datetime-local">`."""
+    return valor.replace(tzinfo=UTC).astimezone(HORA_ECUADOR).strftime("%Y-%m-%dT%H:%M")
+
+
+def _no_encontrado(request: Request, usuario: Usuario):
+    return templates.TemplateResponse(
+        request, "eventos/no_encontrado.html", {"usuario": usuario}, status_code=status.HTTP_404_NOT_FOUND
+    )
+
+
+def _pagina_evento(
+    request: Request,
+    db: Session,
+    usuario: Usuario,
+    evento_id: UUID,
+    *,
+    formulario: dict | None = None,
+    formulario_cuotas: dict | None = None,
+    mensaje: str | None = None,
+    error: str | None = None,
+    codigo: int = 200,
+):
+    try:
+        evento = catalogo_service.obtener_detalle_evento(db, evento_id, solo_cuotas_activas=False)
+    except HTTPException:
+        return _no_encontrado(request, usuario)
+    por_seleccion = {cuota.seleccion: cuota for cuota in evento.cuotas}
+    contexto = {
+        "usuario": usuario,
+        "evento": evento,
+        "deportes": catalogo_service.listar_deportes(db),
+        "cuotas": [(seleccion, etiqueta, por_seleccion.get(seleccion)) for seleccion, etiqueta in SELECCIONES],
+        "formulario": formulario
+        or {
+            "deporte_id": str(evento.deporte_id),
+            "equipo_local": evento.equipo_local,
+            "equipo_visitante": evento.equipo_visitante,
+            "inicia_en": _a_hora_ecuador(evento.inicia_en),
+        },
+        "formulario_cuotas": formulario_cuotas or {},
+        "mensaje": mensaje,
+        "error": error,
+    }
+    return templates.TemplateResponse(request, "admin/evento.html", contexto, status_code=codigo)
+
+
+@router.get("/admin/eventos/{evento_id}")
+def gestion_evento(
+    request: Request,
+    evento_id: str,
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    if (rechazo := _rechazar_si_no_admin(usuario)) is not None:
+        return rechazo
+    if (id_evento := _uuid_o_none(evento_id)) is None:
+        return _no_encontrado(request, usuario)
+    return _pagina_evento(request, db, usuario, id_evento)
+
+
+@router.post("/admin/eventos/{evento_id}/editar")
+def editar_evento(
+    request: Request,
+    evento_id: str,
+    deporte_id: str = Form(default=""),
+    equipo_local: str = Form(default=""),
+    equipo_visitante: str = Form(default=""),
+    inicia_en: str = Form(default=""),
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    if (rechazo := _rechazar_si_no_admin(usuario)) is not None:
+        return rechazo
+    if (id_evento := _uuid_o_none(evento_id)) is None:
+        return _no_encontrado(request, usuario)
+    formulario = {
+        "deporte_id": deporte_id,
+        "equipo_local": equipo_local,
+        "equipo_visitante": equipo_visitante,
+        "inicia_en": inicia_en,
+    }
+    try:
+        fecha = _fecha_ecuador_a_utc(inicia_en)
+    except ValueError:
+        return _pagina_evento(
+            request, db, usuario, id_evento, formulario=formulario, error=MENSAJES_VALIDACION["inicia_en"],
+            codigo=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    try:
+        datos = EventoEditarIn(
+            deporte_id=deporte_id, equipo_local=equipo_local, equipo_visitante=equipo_visitante, inicia_en=fecha
+        )
+        catalogo_service.editar_evento(db, id_evento, datos)
+    except ValidationError as error:
+        return _pagina_evento(
+            request, db, usuario, id_evento, formulario=formulario, error=_mensaje_validacion(error),
+            codigo=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    except HTTPException as error:
+        return _pagina_evento(request, db, usuario, id_evento, formulario=formulario, error=error.detail, codigo=error.status_code)
+    return _pagina_evento(request, db, usuario, id_evento, mensaje="Evento actualizado")
+
+
+@router.post("/admin/eventos/{evento_id}/cuotas")
+def cargar_cuotas(
+    request: Request,
+    evento_id: str,
+    cuota_local: str = Form(default=""),
+    cuota_empate: str = Form(default=""),
+    cuota_visitante: str = Form(default=""),
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    if (rechazo := _rechazar_si_no_admin(usuario)) is not None:
+        return rechazo
+    if (id_evento := _uuid_o_none(evento_id)) is None:
+        return _no_encontrado(request, usuario)
+    formulario = {"local": cuota_local, "empate": cuota_empate, "visitante": cuota_visitante}
+    valores = [
+        (TipoSeleccion.LOCAL, cuota_local),
+        (TipoSeleccion.EMPATE, cuota_empate),
+        (TipoSeleccion.VISITANTE, cuota_visitante),
+    ]
+    # La cuota de empate es opcional: en blanco significa que el deporte no tiene empate.
+    pedidas = [{"seleccion": seleccion, "valor": valor} for seleccion, valor in valores if valor.strip() or seleccion != TipoSeleccion.EMPATE]
+    try:
+        cuotas = catalogo_service.crear_cuotas(db, id_evento, CuotasIn(cuotas=pedidas))
+    except ValidationError as error:
+        return _pagina_evento(
+            request, db, usuario, id_evento, formulario_cuotas=formulario, error=_mensaje_validacion(error),
+            codigo=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    except HTTPException as error:
+        return _pagina_evento(request, db, usuario, id_evento, formulario_cuotas=formulario, error=error.detail, codigo=error.status_code)
+    return _pagina_evento(request, db, usuario, id_evento, mensaje=f"Se cargaron {len(cuotas)} cuotas")
+
+
+@router.post("/admin/cuotas/{cuota_id}/editar")
+def editar_cuota(
+    request: Request,
+    cuota_id: str,
+    valor: str = Form(default=""),
+    activa: str = Form(default=""),
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    if (rechazo := _rechazar_si_no_admin(usuario)) is not None:
+        return rechazo
+    if (id_cuota := _uuid_o_none(cuota_id)) is None:
+        return _no_encontrado(request, usuario)
+    try:
+        evento_id = catalogo_service.obtener_cuota(db, id_cuota).evento_id
+    except HTTPException:
+        return _no_encontrado(request, usuario)
+    try:
+        datos = CuotaEditarIn(valor=valor.strip() or None, activa={"true": True, "false": False}.get(activa))
+        cuota = catalogo_service.editar_cuota(db, id_cuota, datos)
+    except ValidationError as error:
+        return _pagina_evento(
+            request, db, usuario, evento_id, error=_mensaje_validacion(error),
+            codigo=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    except HTTPException as error:
+        return _pagina_evento(request, db, usuario, evento_id, error=error.detail, codigo=error.status_code)
+    estado = "activada" if cuota.activa else "desactivada"
+    texto = f"Cuota {estado}" if datos.valor is None else f"Cuota actualizada a {cuota.valor}"
+    return _pagina_evento(request, db, usuario, evento_id, mensaje=texto)

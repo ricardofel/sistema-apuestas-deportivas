@@ -1,13 +1,15 @@
 """Pantallas de administración del catálogo: acceso, panel, eventos y cuotas."""
 import re
+import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
-from app.db.enums import EstadoEvento, RolUsuario
+from app.db.enums import EstadoEvento, RolUsuario, TipoSeleccion
 from app.modules.catalogo.models import Evento
 from app.modules.usuarios import service as usuarios_service
-from tests.factories import crear_deporte, crear_evento
+from tests.factories import crear_cuota, crear_deporte, crear_evento
 
 
 def _entrar(client, email):
@@ -232,3 +234,242 @@ class TestCrearDeporteDesdeLaPantalla:
         respuesta = admin.post("/admin/deportes", data={"nombre": nombre})
         assert respuesta.status_code == 422
         assert "El nombre del deporte debe tener entre 1 y 50 caracteres" in respuesta.text
+
+
+def _cuotas_del_evento(db, evento):
+    db.expire_all()
+    return {c.seleccion: c for c in db.get(Evento, evento.id).cuotas}
+
+
+def _evento_con_cuotas(db, **campos):
+    evento = crear_evento(db, **campos)
+    crear_cuota(db, evento, TipoSeleccion.LOCAL, Decimal("2.00"))
+    crear_cuota(db, evento, TipoSeleccion.VISITANTE, Decimal("3.00"))
+    return evento
+
+
+class TestAccesoGestionEvento:
+    def test_get_sin_sesion_redirige_al_login(self, client, db):
+        evento = crear_evento(db)
+        respuesta = client.get(f"/admin/eventos/{evento.id}", follow_redirects=False)
+        assert (respuesta.status_code, respuesta.headers["location"]) == (303, "/login")
+
+    def test_get_de_usuario_comun_redirige_al_inicio(self, comun, db):
+        evento = crear_evento(db)
+        respuesta = comun.get(f"/admin/eventos/{evento.id}", follow_redirects=False)
+        assert (respuesta.status_code, respuesta.headers["location"]) == (303, "/")
+
+    @pytest.mark.parametrize(
+        "ruta",
+        ["/admin/eventos/{e}/editar", "/admin/eventos/{e}/cuotas", "/admin/cuotas/{c}/editar"],
+    )
+    def test_post_sin_sesion_redirige_y_no_cambia_nada(self, client, db, ruta):
+        evento = _evento_con_cuotas(db)
+        cuota = evento.cuotas[0]
+        datos = {"equipo_local": "Otro", "valor": "9.99", "cuota_local": "9.99", "cuota_visitante": "9.99"}
+        respuesta = client.post(ruta.format(e=evento.id, c=cuota.id), data=datos, follow_redirects=False)
+        assert (respuesta.status_code, respuesta.headers["location"]) == (303, "/login")
+        db.refresh(evento)
+        db.refresh(cuota)
+        assert evento.equipo_local == "Barcelona" and cuota.valor == Decimal("2.00")
+
+    @pytest.mark.parametrize(
+        "ruta",
+        ["/admin/eventos/{e}/editar", "/admin/eventos/{e}/cuotas", "/admin/cuotas/{c}/editar"],
+    )
+    def test_post_de_usuario_comun_redirige_y_no_cambia_nada(self, comun, db, ruta):
+        evento = _evento_con_cuotas(db)
+        cuota = evento.cuotas[0]
+        datos = {"equipo_local": "Otro", "valor": "9.99", "cuota_local": "9.99", "cuota_visitante": "9.99"}
+        respuesta = comun.post(ruta.format(e=evento.id, c=cuota.id), data=datos, follow_redirects=False)
+        assert (respuesta.status_code, respuesta.headers["location"]) == (303, "/")
+        db.refresh(evento)
+        db.refresh(cuota)
+        assert evento.equipo_local == "Barcelona" and cuota.valor == Decimal("2.00")
+
+
+class TestGestionEvento:
+    def test_muestra_los_datos_del_evento(self, admin, db):
+        evento = crear_evento(db, equipo_local="Barcelona SC", inicia_en=datetime(2030, 5, 20, 22, 30))
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "Barcelona SC" in html and "Programado" in html and "20/05/2030 17:30" in html
+        assert 'value="2030-05-20T17:30"' in html
+
+    def test_muestra_las_cuotas_incluidas_las_inactivas(self, admin, db):
+        evento = _evento_con_cuotas(db)
+        apagada = evento.cuotas[1]
+        apagada.activa = False
+        db.commit()
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "2.00" in html and "3.00" in html and "Inactiva" in html
+
+    def test_evento_inexistente_404(self, admin):
+        respuesta = admin.get(f"/admin/eventos/{uuid.uuid4()}")
+        assert respuesta.status_code == 404 and "Evento no encontrado" in respuesta.text
+
+    def test_id_que_no_es_uuid_404(self, admin):
+        assert admin.get("/admin/eventos/abc").status_code == 404
+
+    def test_evento_cerrado_no_ofrece_editar_ni_cambiar_valores(self, admin, db):
+        evento = _evento_con_cuotas(db, estado=EstadoEvento.CANCELADO)
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "ya no se puede editar" in html
+        assert "/editar" not in html.replace(f"/admin/cuotas/{evento.cuotas[0].id}/editar", "").replace(
+            f"/admin/cuotas/{evento.cuotas[1].id}/editar", ""
+        )
+        assert "Cambiar valor" not in html
+
+
+class TestEditarEventoDesdeLaPantalla:
+    def test_guarda_los_cambios(self, admin, db):
+        evento = crear_evento(db)
+        datos = _datos_evento(evento.deporte_id, equipo_local="Emelec", inicia_en="2099-01-02T20:00")
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/editar", data=datos)
+        assert respuesta.status_code == 200 and "Evento actualizado" in respuesta.text
+        db.refresh(evento)
+        assert evento.equipo_local == "Emelec" and evento.inicia_en.isoformat() == "2099-01-03T01:00:00"
+
+    def test_puede_cambiar_de_deporte(self, admin, db):
+        evento = crear_evento(db)
+        tenis = crear_deporte(db, "Tenis")
+        admin.post(f"/admin/eventos/{evento.id}/editar", data=_datos_evento(tenis.id))
+        db.refresh(evento)
+        assert evento.deporte_id == tenis.id
+
+    @pytest.mark.parametrize(
+        ("cambios", "codigo", "mensaje"),
+        [
+            ({"equipo_local": ""}, 422, "El equipo local debe tener entre 1 y 100 caracteres"),
+            ({"equipo_local": "LDU", "equipo_visitante": "ldu"}, 422, "Los equipos deben ser distintos"),
+            ({"inicia_en": "no es fecha"}, 422, "Ingresa una fecha de inicio válida"),
+            ({"inicia_en": "2000-01-01T10:00"}, 400, "La fecha de inicio debe ser futura"),
+            ({"deporte_id": "999"}, 404, "Deporte no encontrado"),
+        ],
+    )
+    def test_datos_invalidos_no_guardan_y_muestran_el_error(self, admin, db, cambios, codigo, mensaje):
+        evento = crear_evento(db, equipo_local="Original")
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/editar", data=_datos_evento(evento.deporte_id, **cambios))
+        assert respuesta.status_code == codigo and mensaje in respuesta.text
+        db.refresh(evento)
+        assert evento.equipo_local == "Original"
+
+    def test_evento_cerrado_400(self, admin, db):
+        evento = crear_evento(db, estado=EstadoEvento.FINALIZADO, equipo_local="Original")
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/editar", data=_datos_evento(evento.deporte_id))
+        assert respuesta.status_code == 400 and "Solo se puede editar un evento programado" in respuesta.text
+        db.refresh(evento)
+        assert evento.equipo_local == "Original"
+
+    def test_evento_inexistente_404(self, admin, db):
+        deporte = crear_deporte(db)
+        assert admin.post(f"/admin/eventos/{uuid.uuid4()}/editar", data=_datos_evento(deporte.id)).status_code == 404
+
+
+class TestCargarCuotasDesdeLaPantalla:
+    def test_carga_las_tres_cuotas(self, admin, db):
+        evento = crear_evento(db)
+        datos = {"cuota_local": "2.10", "cuota_empate": "3.20", "cuota_visitante": "3.40"}
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/cuotas", data=datos)
+        assert respuesta.status_code == 200 and "Se cargaron 3 cuotas" in respuesta.text
+        cuotas = _cuotas_del_evento(db, evento)
+        assert {s: c.valor for s, c in cuotas.items()} == {
+            TipoSeleccion.LOCAL: Decimal("2.10"),
+            TipoSeleccion.EMPATE: Decimal("3.20"),
+            TipoSeleccion.VISITANTE: Decimal("3.40"),
+        }
+
+    def test_sin_empate_carga_solo_local_y_visitante(self, admin, db):
+        evento = crear_evento(db)
+        datos = {"cuota_local": "1.50", "cuota_empate": "", "cuota_visitante": "2.60"}
+        admin.post(f"/admin/eventos/{evento.id}/cuotas", data=datos)
+        assert set(_cuotas_del_evento(db, evento)) == {TipoSeleccion.LOCAL, TipoSeleccion.VISITANTE}
+
+    @pytest.mark.parametrize(
+        "datos",
+        [
+            {"cuota_local": "1.00", "cuota_visitante": "2.00"},
+            {"cuota_local": "abc", "cuota_visitante": "2.00"},
+            {"cuota_local": "", "cuota_visitante": "2.00"},
+            {"cuota_local": "2.00", "cuota_visitante": "2.00", "cuota_empate": "0.50"},
+            {"cuota_local": "2.123", "cuota_visitante": "2.00"},
+        ],
+    )
+    def test_valores_invalidos_422_y_no_guarda_nada(self, admin, db, datos):
+        evento = crear_evento(db)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/cuotas", data=datos)
+        assert respuesta.status_code == 422
+        assert "Cada cuota debe ser un número mayor que 1.00" in respuesta.text
+        assert _cuotas_del_evento(db, evento) == {}
+
+    def test_conserva_lo_escrito_tras_un_error(self, admin, db):
+        evento = crear_evento(db)
+        respuesta = admin.post(
+            f"/admin/eventos/{evento.id}/cuotas", data={"cuota_local": "2.50", "cuota_visitante": "1.00"}
+        )
+        assert 'value="2.50"' in respuesta.text
+
+    def test_evento_cerrado_400(self, admin, db):
+        evento = crear_evento(db, estado=EstadoEvento.CANCELADO)
+        respuesta = admin.post(
+            f"/admin/eventos/{evento.id}/cuotas", data={"cuota_local": "2.00", "cuota_visitante": "3.00"}
+        )
+        assert respuesta.status_code == 400
+        assert "Solo se pueden cargar cuotas a un evento programado" in respuesta.text
+
+    def test_si_ya_tiene_cuotas_no_ofrece_el_formulario_y_el_post_da_409(self, admin, db):
+        evento = _evento_con_cuotas(db)
+        assert "Cargar cuotas" not in admin.get(f"/admin/eventos/{evento.id}").text
+        respuesta = admin.post(
+            f"/admin/eventos/{evento.id}/cuotas", data={"cuota_local": "5.00", "cuota_visitante": "6.00"}
+        )
+        assert respuesta.status_code == 409 and "ya tiene cuota para: LOCAL, VISITANTE" in respuesta.text
+
+    def test_evento_inexistente_404(self, admin):
+        respuesta = admin.post(
+            f"/admin/eventos/{uuid.uuid4()}/cuotas", data={"cuota_local": "2.00", "cuota_visitante": "3.00"}
+        )
+        assert respuesta.status_code == 404
+
+
+class TestEditarCuotaDesdeLaPantalla:
+    def test_cambia_el_valor_y_no_toca_otras_cuotas(self, admin, db):
+        evento = _evento_con_cuotas(db)
+        cuota = _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL]
+        respuesta = admin.post(f"/admin/cuotas/{cuota.id}/editar", data={"valor": "2.75"})
+        assert respuesta.status_code == 200 and "Cuota actualizada a 2.75" in respuesta.text
+        cuotas = _cuotas_del_evento(db, evento)
+        assert cuotas[TipoSeleccion.LOCAL].valor == Decimal("2.75")
+        assert cuotas[TipoSeleccion.VISITANTE].valor == Decimal("3.00")
+
+    def test_desactiva_y_reactiva(self, admin, db):
+        evento = _evento_con_cuotas(db)
+        cuota = _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL]
+        assert "Cuota desactivada" in admin.post(f"/admin/cuotas/{cuota.id}/editar", data={"activa": "false"}).text
+        assert _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL].activa is False
+        assert "Cuota activada" in admin.post(f"/admin/cuotas/{cuota.id}/editar", data={"activa": "true"}).text
+        assert _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL].activa is True
+
+    @pytest.mark.parametrize("valor", ["1.00", "abc", "0", "-3"])
+    def test_valor_invalido_422(self, admin, db, valor):
+        evento = _evento_con_cuotas(db)
+        cuota = _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL]
+        respuesta = admin.post(f"/admin/cuotas/{cuota.id}/editar", data={"valor": valor})
+        assert respuesta.status_code == 422
+        assert _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL].valor == Decimal("2.00")
+
+    def test_sin_datos_422(self, admin, db):
+        cuota = _evento_con_cuotas(db).cuotas[0]
+        respuesta = admin.post(f"/admin/cuotas/{cuota.id}/editar", data={})
+        assert respuesta.status_code == 422 and "al menos un campo" in respuesta.text
+
+    def test_no_cambia_el_valor_de_un_evento_cerrado(self, admin, db):
+        evento = _evento_con_cuotas(db, estado=EstadoEvento.FINALIZADO)
+        cuota = _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL]
+        respuesta = admin.post(f"/admin/cuotas/{cuota.id}/editar", data={"valor": "9.00"})
+        assert respuesta.status_code == 400
+        assert "Solo se puede cambiar el valor de un evento programado" in respuesta.text
+        assert _cuotas_del_evento(db, evento)[TipoSeleccion.LOCAL].valor == Decimal("2.00")
+
+    def test_cuota_inexistente_o_id_invalido_404(self, admin):
+        assert admin.post(f"/admin/cuotas/{uuid.uuid4()}/editar", data={"valor": "2.00"}).status_code == 404
+        assert admin.post("/admin/cuotas/abc/editar", data={"valor": "2.00"}).status_code == 404
