@@ -1,0 +1,41 @@
+{# Badges de estado compartidos por las pantallas de boletos. #}
+{% set ESTILO_BOLETO = {
+  "PENDIENTE": "bg-amber-100 text-amber-800",
+  "GANADO": "bg-emerald-100 text-emerald-800",
+  "PERDIDO": "bg-rose-100 text-rose-800",
+  "REEMBOLSADO": "bg-slate-100 text-slate-700"
+} %}
+{% set NOMBRE_BOLETO = {
+  "PENDIENTE": "Pendiente", "GANADO": "Ganado", "PERDIDO": "Perdido", "REEMBOLSADO": "Reembolsado"
+} %}
+{% set ESTILO_SELECCION = {
+  "PENDIENTE": "bg-amber-100 text-amber-800",
+  "ACERTADA": "bg-emerald-100 text-emerald-800",
+  "FALLIDA": "bg-rose-100 text-rose-800",
+  "ANULADA": "bg-slate-100 text-slate-700"
+} %}
+{% set NOMBRE_SELECCION = {
+  "PENDIENTE": "Pendiente", "ACERTADA": "Acertada", "FALLIDA": "Fallida", "ANULADA": "Anulada"
+} %}
+{% set NOMBRE_RESULTADO = {"LOCAL": "Local", "EMPATE": "Empate", "VISITANTE": "Visitante"} %}
+
+{% macro badge_boleto(estado) -%}
+<span class="{{ ESTILO_BOLETO[estado.value] }} text-xs px-2 py-1 rounded-full">{{ NOMBRE_BOLETO[estado.value] }}</span>
+{%- endmacro %}
+
+{% macro badge_seleccion(estado) -%}
+<span class="{{ ESTILO_SELECCION[estado.value] }} text-xs px-2 py-1 rounded-full">{{ NOMBRE_SELECCION[estado.value] }}</span>
+{%- endmacro %}
+
+{# Último dato del boleto según su estado: premio, devolución o ganancia potencial. #}
+{% macro resultado(b) -%}
+{% if b.estado.value == "GANADO" -%}
+<span>Ganó: <strong class="text-emerald-700">{{ b.ganancia_potencial }}</strong></span>
+{%- elif b.estado.value == "REEMBOLSADO" -%}
+<span>Devuelto: <strong class="text-slate-900">{{ b.monto }}</strong></span>
+{%- elif b.estado.value == "PERDIDO" -%}
+<span>Ganancia potencial: <strong class="line-through text-slate-400">{{ b.ganancia_potencial }}</strong></span>
+{%- else -%}
+<span>Ganancia potencial: <strong class="text-slate-900">{{ b.ganancia_potencial }}</strong></span>
+{%- endif %}
+{%- endmacro %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "boletos/_estados.html" as e with context %}
+
+{% block titulo %}Boleto {{ boleto.id | string | truncate(8, True, "") }}{% endblock %}
+
+{% block contenido %}
+<div class="space-y-6">
+  <a href="/mis-boletos" class="text-sm text-slate-500 hover:text-emerald-700">&larr; Mis boletos</a>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-semibold text-slate-900">Boleto {{ boleto.id | string | truncate(8, True, "") }}</h1>
+      {{ e.badge_boleto(boleto.estado) }}
+    </div>
+    <p class="text-sm text-slate-500 mt-1">Creado el {{ boleto.creado_en | hora_local }}
+      {% if boleto.liquidado_en %}· Liquidado el {{ boleto.liquidado_en | hora_local }}{% endif %}</p>
+
+    <dl class="mt-6 grid grid-cols-3 gap-4 text-center">
+      <div class="bg-slate-50 rounded-lg p-3">
+        <dt class="text-sm text-slate-500">Apostado</dt>
+        <dd class="text-lg font-semibold text-slate-900">{{ boleto.monto }}</dd>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <dt class="text-sm text-slate-500">Cuota total</dt>
+        <dd class="text-lg font-semibold text-slate-900">{{ boleto.cuota_total }}</dd>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        {% if boleto.estado.value == "GANADO" %}
+        <dt class="text-sm text-slate-500">Premio</dt>
+        <dd class="text-lg font-semibold text-emerald-700">{{ boleto.ganancia_potencial }}</dd>
+        {% elif boleto.estado.value == "REEMBOLSADO" %}
+        <dt class="text-sm text-slate-500">Devuelto</dt>
+        <dd class="text-lg font-semibold text-slate-900">{{ boleto.monto }}</dd>
+        {% else %}
+        <dt class="text-sm text-slate-500">Ganancia potencial</dt>
+        <dd class="text-lg font-semibold {{ 'line-through text-slate-400' if boleto.estado.value == 'PERDIDO' else 'text-slate-900' }}">{{ boleto.ganancia_potencial }}</dd>
+        {% endif %}
+      </div>
+    </dl>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <h2 class="text-lg font-semibold text-slate-900">Selecciones</h2>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-slate-500 border-b border-slate-200">
+          <tr>
+            <th class="py-2 pr-4 font-medium">Partido</th>
+            <th class="py-2 pr-4 font-medium">Tu elección</th>
+            <th class="py-2 pr-4 font-medium text-right">Cuota congelada</th>
+            <th class="py-2 font-medium text-right">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in boleto.selecciones %}
+          <tr class="border-b border-slate-100">
+            <td class="py-2 pr-4 text-slate-900">{{ s.evento }}</td>
+            <td class="py-2 pr-4">{{ e.NOMBRE_RESULTADO[s.seleccion.value] }}</td>
+            <td class="py-2 pr-4 text-right font-medium">{{ s.cuota_congelada }}</td>
+            <td class="py-2 text-right">{{ e.badge_seleccion(s.estado) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if boleto.estado.value == "REEMBOLSADO" %}
+    <p class="mt-4 text-sm text-slate-500">Los eventos de este boleto se cancelaron: se te devolvió el monto apostado.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

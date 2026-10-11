@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% import "boletos/_estados.html" as e with context %}
+
+{% block titulo %}Mis boletos{% endblock %}
+
+{% set chip = "text-sm px-4 py-1.5 rounded-full border transition" %}
+{% set chip_activo = "bg-emerald-600 border-emerald-600 text-white" %}
+{% set chip_inactivo = "bg-white border-slate-300 text-slate-700 hover:border-emerald-600 hover:text-emerald-700" %}
+{% set filtro = "&estado=" ~ estado_activo if estado_activo else "" %}
+
+{% block contenido %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-semibold text-slate-900">Mis boletos</h1>
+    <a href="/eventos" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Apostar</a>
+  </div>
+
+  <div class="flex flex-wrap gap-2">
+    <a href="/mis-boletos" class="{{ chip }} {{ chip_activo if estado_activo is none else chip_inactivo }}">Todos</a>
+    {% for est in estados %}
+    <a href="/mis-boletos?estado={{ est.value }}"
+       class="{{ chip }} {{ chip_activo if estado_activo == est.value else chip_inactivo }}">{{ e.NOMBRE_BOLETO[est.value] }}</a>
+    {% endfor %}
+  </div>
+
+  {% if boletos %}
+  <div class="space-y-4">
+    {% for b in boletos %}
+    <a href="/boleto/{{ b.id }}" class="block bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:border-emerald-600 transition">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          {{ e.badge_boleto(b.estado) }}
+          <span class="text-sm text-slate-500">{{ "Simple" if b.selecciones | length == 1 else "Combinada de " ~ (b.selecciones | length) }}</span>
+        </div>
+        <span class="text-sm text-slate-500">{{ b.creado_en | hora_local }}</span>
+      </div>
+
+      <ul class="mt-3 space-y-1 text-slate-900">
+        {% for s in b.selecciones %}
+        <li class="flex justify-between gap-4">
+          <span>{{ s.evento }} <span class="text-slate-500">· {{ e.NOMBRE_RESULTADO[s.seleccion.value] }}</span></span>
+          <span class="font-medium {{ 'line-through text-slate-400' if s.estado.value == 'ANULADA' else '' }}">{{ s.cuota_congelada }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap justify-between gap-2 text-sm">
+        <span>Apostado: <strong class="text-slate-900">{{ b.monto }}</strong></span>
+        <span>Cuota: <strong class="text-slate-900">{{ b.cuota_total }}</strong></span>
+        {{ e.resultado(b) }}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if paginas > 1 %}
+  <div class="flex items-center justify-between text-sm">
+    {% if pagina > 1 %}
+    <a href="/mis-boletos?pagina={{ pagina - 1 }}{{ filtro }}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Anterior</a>
+    {% else %}<span></span>{% endif %}
+    <span class="text-slate-500">Página {{ pagina }} de {{ paginas }}</span>
+    {% if pagina < paginas %}
+    <a href="/mis-boletos?pagina={{ pagina + 1 }}{{ filtro }}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Siguiente</a>
+    {% else %}<span></span>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
+    <p class="text-slate-900 font-medium">{{ "No tienes boletos con este estado" if estado_activo else "Todavía no tienes boletos" }}</p>
+    <p class="text-sm text-slate-500 mt-1">Elige tus cuotas en <a href="/eventos" class="text-emerald-700 hover:underline">Eventos</a> para armar uno.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
