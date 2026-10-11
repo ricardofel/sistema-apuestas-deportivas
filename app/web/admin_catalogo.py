@@ -1,4 +1,5 @@
 """Pantallas de administración del catálogo (rutas /admin/...). Solo para el rol ADMIN."""
+import logging
 from datetime import UTC, datetime
 from math import ceil
 from uuid import UUID
@@ -11,11 +12,19 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_db, get_usuario_opcional
 from app.db.enums import EstadoEvento, RolUsuario, TipoSeleccion
 from app.modules.catalogo import service as catalogo_service
-from app.modules.catalogo.schemas import CuotaEditarIn, CuotasIn, DeporteIn, EventoEditarIn, EventoIn
+from app.modules.catalogo.schemas import (
+    CuotaEditarIn,
+    CuotasIn,
+    DeporteIn,
+    EventoEditarIn,
+    EventoIn,
+    ResultadoIn,
+)
 from app.modules.usuarios.models import Usuario
 from app.web.templating import HORA_ECUADOR, templates
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 EVENTOS_POR_PAGINA = 20
 
@@ -26,6 +35,7 @@ MENSAJES_VALIDACION = {
     "inicia_en": "Ingresa una fecha de inicio válida",
     "nombre": "El nombre del deporte debe tener entre 1 y 50 caracteres",
     "valor": "Cada cuota debe ser un número mayor que 1.00, con hasta 2 decimales",
+    "resultado": "Elige un resultado válido",
 }
 
 SELECCIONES = [
@@ -371,3 +381,72 @@ def editar_cuota(
     estado = "activada" if cuota.activa else "desactivada"
     texto = f"Cuota {estado}" if datos.valor is None else f"Cuota actualizada a {cuota.valor}"
     return _pagina_evento(request, db, usuario, evento_id, mensaje=texto)
+
+
+def _cerrar_evento(request: Request, db: Session, usuario: Usuario, evento_id: UUID, operacion):
+    """Ejecuta `operacion() -> mensaje` (resultado o cancelación) y re-renderiza la gestión del evento."""
+    try:
+        mensaje = operacion()
+    except ValidationError as error:
+        return _pagina_evento(
+            request, db, usuario, evento_id, error=_mensaje_validacion(error),
+            codigo=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    except HTTPException as error:
+        return _pagina_evento(request, db, usuario, evento_id, error=error.detail, codigo=error.status_code)
+    except Exception:
+        # El servicio ya hizo rollback: el evento sigue como estaba y nada quedó a medias.
+        logger.exception("Falló el cierre del evento %s", evento_id)
+        return _pagina_evento(
+            request, db, usuario, evento_id,
+            error="No se pudo completar la operación y no se guardó ningún cambio. Inténtalo de nuevo.",
+            codigo=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    return _pagina_evento(request, db, usuario, evento_id, mensaje=mensaje)
+
+
+@router.post("/admin/eventos/{evento_id}/resultado")
+def registrar_resultado(
+    request: Request,
+    evento_id: str,
+    resultado: str = Form(default=""),
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    if (rechazo := _rechazar_si_no_admin(usuario)) is not None:
+        return rechazo
+    if (id_evento := _uuid_o_none(evento_id)) is None:
+        return _no_encontrado(request, usuario)
+
+    def operacion() -> str:
+        datos = ResultadoIn(resultado=resultado)
+        _, resumen = catalogo_service.registrar_resultado(db, id_evento, datos.resultado)
+        return (
+            f"Resultado registrado. Boletos ganados: {resumen['boletos_ganados']}, "
+            f"perdidos: {resumen['boletos_perdidos']}, pendientes: {resumen['boletos_pendientes']}. "
+            f"Premios acreditados: {resumen['premios_acreditados']}"
+        )
+
+    return _cerrar_evento(request, db, usuario, id_evento, operacion)
+
+
+@router.post("/admin/eventos/{evento_id}/cancelar")
+def cancelar_evento(
+    request: Request,
+    evento_id: str,
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    if (rechazo := _rechazar_si_no_admin(usuario)) is not None:
+        return rechazo
+    if (id_evento := _uuid_o_none(evento_id)) is None:
+        return _no_encontrado(request, usuario)
+
+    def operacion() -> str:
+        _, resumen = catalogo_service.cancelar_evento(db, id_evento)
+        return (
+            f"Evento cancelado. Boletos reembolsados: {resumen['boletos_reembolsados']}. "
+            f"Monto reembolsado: {resumen['monto_reembolsado']}"
+        )
+
+    return _cerrar_evento(request, db, usuario, id_evento, operacion)

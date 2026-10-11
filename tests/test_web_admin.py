@@ -473,3 +473,180 @@ class TestEditarCuotaDesdeLaPantalla:
     def test_cuota_inexistente_o_id_invalido_404(self, admin):
         assert admin.post(f"/admin/cuotas/{uuid.uuid4()}/editar", data={"valor": "2.00"}).status_code == 404
         assert admin.post("/admin/cuotas/abc/editar", data={"valor": "2.00"}).status_code == 404
+
+
+RESUMEN_LIQUIDACION = {
+    "selecciones_acertadas": 2,
+    "selecciones_fallidas": 1,
+    "boletos_ganados": 3,
+    "boletos_perdidos": 4,
+    "boletos_pendientes": 5,
+    "premios_acreditados": Decimal("30.00"),
+}
+RESUMEN_CANCELACION = {
+    "selecciones_anuladas": 2,
+    "boletos_recalculados": 1,
+    "boletos_reembolsados": 6,
+    "monto_reembolsado": Decimal("42.50"),
+}
+
+
+@pytest.fixture()
+def liquidacion(monkeypatch):
+    """Parchea las funciones de Daniel y registra con qué evento se llamaron."""
+    llamadas = {"liquidar": [], "cancelar": []}
+
+    def liquidar(db, evento_id):
+        llamadas["liquidar"].append(evento_id)
+        return RESUMEN_LIQUIDACION
+
+    def cancelar(db, evento_id):
+        llamadas["cancelar"].append(evento_id)
+        return RESUMEN_CANCELACION
+
+    monkeypatch.setattr("app.modules.apuestas.liquidacion.liquidar_evento", liquidar, raising=False)
+    monkeypatch.setattr("app.modules.apuestas.liquidacion.procesar_cancelacion_evento", cancelar, raising=False)
+    return llamadas
+
+
+def _estado_guardado(db, evento):
+    db.expire_all()
+    guardado = db.get(Evento, evento.id)
+    return guardado.estado, guardado.resultado
+
+
+class TestAccesoCierre:
+    @pytest.mark.parametrize("accion", ["resultado", "cancelar"])
+    def test_sin_sesion_redirige_y_no_cierra_nada(self, client, db, liquidacion, accion):
+        evento = _evento_con_cuotas(db)
+        respuesta = client.post(
+            f"/admin/eventos/{evento.id}/{accion}", data={"resultado": "LOCAL"}, follow_redirects=False
+        )
+        assert (respuesta.status_code, respuesta.headers["location"]) == (303, "/login")
+        assert _estado_guardado(db, evento) == (EstadoEvento.PROGRAMADO, None)
+        assert liquidacion == {"liquidar": [], "cancelar": []}
+
+    @pytest.mark.parametrize("accion", ["resultado", "cancelar"])
+    def test_usuario_comun_redirige_y_no_cierra_nada(self, comun, db, liquidacion, accion):
+        evento = _evento_con_cuotas(db)
+        respuesta = comun.post(
+            f"/admin/eventos/{evento.id}/{accion}", data={"resultado": "LOCAL"}, follow_redirects=False
+        )
+        assert (respuesta.status_code, respuesta.headers["location"]) == (303, "/")
+        assert _estado_guardado(db, evento) == (EstadoEvento.PROGRAMADO, None)
+        assert liquidacion == {"liquidar": [], "cancelar": []}
+
+
+class TestFormulariosDeCierre:
+    @pytest.mark.parametrize("estado", [EstadoEvento.PROGRAMADO, EstadoEvento.EN_VIVO])
+    def test_un_evento_abierto_ofrece_resultado_y_cancelacion(self, admin, db, estado):
+        evento = _evento_con_cuotas(db, estado=estado)
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert f'action="/admin/eventos/{evento.id}/resultado"' in html
+        assert f'action="/admin/eventos/{evento.id}/cancelar"' in html
+
+    @pytest.mark.parametrize("estado", [EstadoEvento.FINALIZADO, EstadoEvento.CANCELADO])
+    def test_un_evento_cerrado_ya_no_los_ofrece(self, admin, db, estado):
+        evento = _evento_con_cuotas(db, estado=estado, resultado=TipoSeleccion.LOCAL if estado == EstadoEvento.FINALIZADO else None)
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "/resultado" not in html and "/cancelar" not in html
+
+    def test_solo_ofrece_los_resultados_que_tienen_cuota(self, admin, db):
+        evento = _evento_con_cuotas(db, equipo_local="Barcelona", equipo_visitante="Aucas")
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert 'value="LOCAL"' in html and 'value="VISITANTE"' in html and 'value="EMPATE"' not in html
+        assert "Gana Barcelona" in html and "Gana Aucas" in html
+
+    def test_sin_cuotas_pide_cargarlas_antes_de_registrar_resultado(self, admin, db):
+        evento = crear_evento(db)
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "antes de registrar un resultado" in html and 'name="resultado"' not in html
+
+    def test_un_evento_finalizado_muestra_el_resultado_final(self, admin, db):
+        evento = _evento_con_cuotas(
+            db, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.VISITANTE, equipo_visitante="Aucas"
+        )
+        html = admin.get(f"/admin/eventos/{evento.id}").text
+        assert "Resultado final" in html and "gana Aucas" in html
+
+
+class TestRegistrarResultadoDesdeLaPantalla:
+    def test_finaliza_el_evento_liquida_y_muestra_el_resumen(self, admin, db, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/resultado", data={"resultado": "LOCAL"})
+        assert respuesta.status_code == 200
+        assert "Boletos ganados: 3, perdidos: 4, pendientes: 5" in respuesta.text
+        assert "Premios acreditados: 30.00" in respuesta.text
+        assert _estado_guardado(db, evento) == (EstadoEvento.FINALIZADO, TipoSeleccion.LOCAL)
+        assert liquidacion["liquidar"] == [evento.id]
+        assert "Resultado final" in respuesta.text and "/resultado" not in respuesta.text
+
+    def test_resultado_sin_cuota_en_el_evento_400(self, admin, db, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/resultado", data={"resultado": "EMPATE"})
+        assert respuesta.status_code == 400 and "El resultado no es válido para este evento" in respuesta.text
+        assert _estado_guardado(db, evento) == (EstadoEvento.PROGRAMADO, None)
+        assert liquidacion["liquidar"] == []
+
+    @pytest.mark.parametrize("valor", ["", "GANA", "local"])
+    def test_resultado_que_no_existe_422(self, admin, db, liquidacion, valor):
+        evento = _evento_con_cuotas(db)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/resultado", data={"resultado": valor})
+        assert respuesta.status_code == 422 and "Elige un resultado válido" in respuesta.text
+        assert liquidacion["liquidar"] == []
+
+    def test_evento_cerrado_400(self, admin, db, liquidacion):
+        evento = _evento_con_cuotas(db, estado=EstadoEvento.CANCELADO)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/resultado", data={"resultado": "LOCAL"})
+        assert respuesta.status_code == 400 and "El evento ya fue cerrado" in respuesta.text
+        assert liquidacion["liquidar"] == []
+
+    def test_evento_inexistente_o_id_invalido_404(self, admin, liquidacion):
+        assert admin.post(f"/admin/eventos/{uuid.uuid4()}/resultado", data={"resultado": "LOCAL"}).status_code == 404
+        assert admin.post("/admin/eventos/abc/resultado", data={"resultado": "LOCAL"}).status_code == 404
+
+    def test_si_la_liquidacion_falla_hay_rollback_y_mensaje_amable(self, admin, db, monkeypatch):
+        evento = _evento_con_cuotas(db)
+
+        def liquidar_con_error(db, evento_id):
+            raise RuntimeError("falla interna")
+
+        monkeypatch.setattr("app.modules.apuestas.liquidacion.liquidar_evento", liquidar_con_error, raising=False)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/resultado", data={"resultado": "LOCAL"})
+        assert respuesta.status_code == 500
+        assert "no se guardó ningún cambio" in respuesta.text and "falla interna" not in respuesta.text
+        assert _estado_guardado(db, evento) == (EstadoEvento.PROGRAMADO, None)
+
+
+class TestCancelarDesdeLaPantalla:
+    def test_cancela_el_evento_y_muestra_los_reembolsos(self, admin, db, liquidacion):
+        evento = _evento_con_cuotas(db)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/cancelar")
+        assert respuesta.status_code == 200
+        assert "Evento cancelado. Boletos reembolsados: 6. Monto reembolsado: 42.50" in respuesta.text
+        assert _estado_guardado(db, evento) == (EstadoEvento.CANCELADO, None)
+        assert liquidacion["cancelar"] == [evento.id] and liquidacion["liquidar"] == []
+
+    @pytest.mark.parametrize("estado", [EstadoEvento.FINALIZADO, EstadoEvento.CANCELADO])
+    def test_evento_cerrado_400(self, admin, db, liquidacion, estado):
+        evento = _evento_con_cuotas(db, estado=estado)
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/cancelar")
+        assert respuesta.status_code == 400 and "El evento ya fue cerrado" in respuesta.text
+        assert liquidacion["cancelar"] == []
+
+    def test_evento_inexistente_o_id_invalido_404(self, admin, liquidacion):
+        assert admin.post(f"/admin/eventos/{uuid.uuid4()}/cancelar").status_code == 404
+        assert admin.post("/admin/eventos/abc/cancelar").status_code == 404
+
+    def test_si_el_reembolso_falla_hay_rollback_y_mensaje_amable(self, admin, db, monkeypatch):
+        evento = _evento_con_cuotas(db)
+
+        def cancelar_con_error(db, evento_id):
+            raise RuntimeError("falla interna")
+
+        monkeypatch.setattr(
+            "app.modules.apuestas.liquidacion.procesar_cancelacion_evento", cancelar_con_error, raising=False
+        )
+        respuesta = admin.post(f"/admin/eventos/{evento.id}/cancelar")
+        assert respuesta.status_code == 500 and "no se guardó ningún cambio" in respuesta.text
+        assert _estado_guardado(db, evento) == (EstadoEvento.PROGRAMADO, None)

@@ -101,4 +101,49 @@
     {% endif %}
   </section>
 </div>
+
+{% if evento.estado.value == "FINALIZADO" %}
+<p class="mt-6 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3">
+  Resultado final:
+  <strong>{% if evento.resultado.value == "LOCAL" %}gana {{ evento.equipo_local }}{% elif evento.resultado.value == "VISITANTE" %}gana {{ evento.equipo_visitante }}{% else %}empate{% endif %}</strong>.
+  Los boletos ya fueron liquidados.
+</p>
+{% elif evento.estado.value == "CANCELADO" %}
+<p class="mt-6 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg px-4 py-3">Evento cancelado. Los boletos fueron reembolsados.</p>
+{% else %}
+<section class="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6" aria-labelledby="titulo-cierre">
+  <h2 id="titulo-cierre" class="text-lg font-semibold text-slate-900">Cerrar el evento</h2>
+  <p class="text-sm text-slate-500 mt-1">Ambas acciones son definitivas: el evento queda inmutable y los boletos se procesan al instante.</p>
+  <div class="mt-4 grid gap-6 lg:grid-cols-2">
+    <form method="post" action="/admin/eventos/{{ evento.id }}/resultado" class="space-y-4">
+      <h3 class="font-medium text-slate-900">Registrar resultado y liquidar</h3>
+      {% if evento.cuotas %}
+      <div>
+        <label for="resultado" class="text-sm text-slate-500">Resultado</label>
+        <select id="resultado" name="resultado" required class="{{ input }}">
+          <option value="" disabled selected>Elige el resultado</option>
+          {% for seleccion, etiqueta, cuota in cuotas if cuota %}
+          <option value="{{ seleccion.value }}">{{ "Gana " ~ evento.equipo_local if seleccion.value == "LOCAL" else "Gana " ~ evento.equipo_visitante if seleccion.value == "VISITANTE" else "Empate" }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <label class="flex items-start gap-2 text-sm text-slate-600">
+        <input type="checkbox" required class="mt-1"> Confirmo el resultado; no se podrá cambiar.
+      </label>
+      <button type="submit" class="{{ boton }}">Registrar resultado</button>
+      {% else %}
+      <p class="text-sm text-slate-500">Carga las cuotas del evento antes de registrar un resultado.</p>
+      {% endif %}
+    </form>
+    <form method="post" action="/admin/eventos/{{ evento.id }}/cancelar" class="space-y-4">
+      <h3 class="font-medium text-slate-900">Cancelar el evento</h3>
+      <p class="text-sm text-slate-500">Se anulan las selecciones pendientes y se reembolsan los boletos afectados.</p>
+      <label class="flex items-start gap-2 text-sm text-slate-600">
+        <input type="checkbox" required class="mt-1"> Confirmo que quiero cancelar este evento.
+      </label>
+      <button type="submit" class="bg-rose-600 hover:bg-rose-700 text-white font-medium px-4 py-2 rounded-lg transition">Cancelar evento</button>
+    </form>
+  </div>
+</section>
+{% endif %}
 {% endblock %}
