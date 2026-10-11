@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "admin/_comun.html" import badge_estado, avisos %}
+
+{% block titulo %}Eventos (admin){% endblock %}
+
+{% block contenido %}
+{% set input = "w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none" %}
+{% set boton = "bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition" %}
+{% set consulta = ("&estado=" ~ estado_activo.value if estado_activo else "") ~ ("&deporte=" ~ deporte_activo if deporte_activo else "") %}
+
+<a href="/admin" class="text-sm text-slate-500 hover:text-emerald-700 transition">&larr; Panel de administración</a>
+<h1 class="mt-2 text-2xl font-semibold text-slate-900">Eventos</h1>
+<p class="text-sm text-slate-500 mt-1">Crea deportes y eventos; las cuotas se cargan al abrir un evento.</p>
+
+{{ avisos(mensaje, error) }}
+{% if evento_nuevo %}
+<p class="mt-2 text-sm"><a href="/admin/eventos/{{ evento_nuevo }}" class="font-medium text-emerald-700 hover:text-emerald-800 underline">Cargar las cuotas del evento &rarr;</a></p>
+{% endif %}
+
+<div class="mt-6 grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6" aria-labelledby="titulo-nuevo-evento">
+    <h2 id="titulo-nuevo-evento" class="text-lg font-semibold text-slate-900">Nuevo evento</h2>
+    {% if deportes %}
+    <form method="post" action="/admin/eventos" class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div class="sm:col-span-2">
+        <label for="deporte_id" class="text-sm text-slate-500">Deporte</label>
+        <select id="deporte_id" name="deporte_id" required class="{{ input }}">
+          <option value="" disabled {{ "selected" if not formulario.deporte_id }}>Elige un deporte</option>
+          {% for d in deportes %}
+          <option value="{{ d.id }}" {{ "selected" if formulario.deporte_id == d.id | string }}>{{ d.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="equipo_local" class="text-sm text-slate-500">Equipo local</label>
+        <input id="equipo_local" name="equipo_local" type="text" maxlength="100" required value="{{ formulario.equipo_local }}" class="{{ input }}">
+      </div>
+      <div>
+        <label for="equipo_visitante" class="text-sm text-slate-500">Equipo visitante</label>
+        <input id="equipo_visitante" name="equipo_visitante" type="text" maxlength="100" required value="{{ formulario.equipo_visitante }}" class="{{ input }}">
+      </div>
+      <div class="sm:col-span-2">
+        <label for="inicia_en" class="text-sm text-slate-500">Inicio (hora de Ecuador)</label>
+        <input id="inicia_en" name="inicia_en" type="datetime-local" required value="{{ formulario.inicia_en }}" class="{{ input }}">
+      </div>
+      <div class="sm:col-span-2">
+        <button type="submit" class="{{ boton }}">Crear evento</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="mt-4 text-sm text-slate-500">Primero crea un deporte para poder registrar eventos.</p>
+    {% endif %}
+  </section>
+
+  <section class="lg:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6" aria-labelledby="titulo-nuevo-deporte">
+    <h2 id="titulo-nuevo-deporte" class="text-lg font-semibold text-slate-900">Nuevo deporte</h2>
+    <form method="post" action="/admin/deportes" class="mt-4 space-y-4">
+      <div>
+        <label for="nombre" class="text-sm text-slate-500">Nombre</label>
+        <input id="nombre" name="nombre" type="text" maxlength="50" required value="{{ nombre_deporte }}" class="{{ input }}">
+      </div>
+      <button type="submit" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Crear deporte</button>
+    </form>
+    {% if deportes %}
+    <p class="mt-4 text-sm text-slate-500">Activos: {{ deportes | map(attribute="nombre") | join(", ") }}</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="mt-8" aria-labelledby="titulo-lista">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <h2 id="titulo-lista" class="text-lg font-semibold text-slate-900">Todos los eventos <span class="text-sm font-normal text-slate-500">({{ total }})</span></h2>
+    <form method="get" action="/admin/eventos" class="flex flex-wrap items-end gap-2">
+      <div>
+        <label for="filtro-estado" class="text-sm text-slate-500">Estado</label>
+        <select id="filtro-estado" name="estado" class="block border border-slate-300 rounded-lg px-3 py-2">
+          <option value="">Todos</option>
+          {% for e in estados %}
+          <option value="{{ e.value }}" {{ "selected" if estado_activo == e }}>{{ e.value | replace("_", " ") | capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="filtro-deporte" class="text-sm text-slate-500">Deporte</label>
+        <select id="filtro-deporte" name="deporte" class="block border border-slate-300 rounded-lg px-3 py-2">
+          <option value="">Todos</option>
+          {% for d in deportes %}
+          <option value="{{ d.id }}" {{ "selected" if deporte_activo == d.id }}>{{ d.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Filtrar</button>
+    </form>
+  </div>
+
+  {% if eventos %}
+  <div class="mt-4 bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-500 border-b border-slate-200">
+          <th scope="col" class="px-4 py-3 font-medium">Inicio</th>
+          <th scope="col" class="px-4 py-3 font-medium">Evento</th>
+          <th scope="col" class="px-4 py-3 font-medium">Deporte</th>
+          <th scope="col" class="px-4 py-3 font-medium">Estado</th>
+          <th scope="col" class="px-4 py-3 font-medium">Cuotas</th>
+          <th scope="col" class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for evento in eventos %}
+        <tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+          <td class="px-4 py-3 whitespace-nowrap text-slate-500">{{ evento.inicia_en | hora_local }}</td>
+          <td class="px-4 py-3 font-medium text-slate-900">{{ evento.equipo_local }} <span class="text-slate-400 font-normal">vs</span> {{ evento.equipo_visitante }}</td>
+          <td class="px-4 py-3">{{ evento.deporte.nombre }}</td>
+          <td class="px-4 py-3">{{ badge_estado(evento.estado) }}</td>
+          <td class="px-4 py-3">{{ evento.cuotas | length }}</td>
+          <td class="px-4 py-3 text-right"><a href="/admin/eventos/{{ evento.id }}" class="font-medium text-emerald-700 hover:text-emerald-800">Gestionar</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if paginas > 1 %}
+  <nav class="mt-4 flex items-center justify-between text-sm" aria-label="Paginación">
+    {% if pagina > 1 %}<a href="/admin/eventos?pagina={{ pagina - 1 }}{{ consulta }}" class="text-emerald-700 hover:text-emerald-800">&larr; Anterior</a>{% else %}<span></span>{% endif %}
+    <span class="text-slate-500">Página {{ pagina }} de {{ paginas }}</span>
+    {% if pagina < paginas %}<a href="/admin/eventos?pagina={{ pagina + 1 }}{{ consulta }}" class="text-emerald-700 hover:text-emerald-800">Siguiente &rarr;</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="mt-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
+    <p class="text-slate-900 font-medium">No hay eventos con esos filtros</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
