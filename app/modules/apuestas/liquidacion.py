@@ -1,4 +1,4 @@
-"""Liquidación de boletos cuando un evento termina (contrato con el Integrante B).
+"""Liquidación y cancelación de boletos (contrato con el Integrante B).
 
 Reglas del contrato:
 - No hace commit: solo flush. Quien llama (catálogo) hace commit o rollback de todo.
@@ -8,6 +8,7 @@ Reglas del contrato:
 """
 from datetime import UTC, datetime
 from decimal import Decimal
+from math import prod
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.enums import EstadoBoleto, EstadoSeleccion, TipoTransaccion
 from app.modules.apuestas.models import Boleto, Seleccion
+from app.modules.apuestas.service import redondear
 from app.modules.billetera import service as billetera_service
 from app.modules.catalogo import service as catalogo_service
 
@@ -68,6 +70,59 @@ def liquidar_evento(db: Session, evento_id: UUID) -> dict:
             resumen["boletos_perdidos"] += 1
         else:
             resumen["boletos_pendientes"] += 1
+
+    db.flush()
+    return resumen
+
+
+def procesar_cancelacion_evento(db: Session, evento_id: UUID) -> dict:
+    """Anula las selecciones del evento cancelado y reembolsa o recalcula sus boletos.
+
+    - Boleto con todas sus selecciones anuladas -> REEMBOLSADO y se devuelve el monto.
+    - Boleto con selecciones vivas -> se recalcula cuota_total y ganancia_potencial sin
+      las anuladas, y se aplica la regla de cierre (puede quedar GANADO o seguir PENDIENTE).
+    """
+    catalogo_service.obtener_evento(db, evento_id)  # 404 si no existe
+
+    selecciones = list(
+        db.scalars(
+            select(Seleccion).where(
+                Seleccion.evento_id == evento_id, Seleccion.estado == EstadoSeleccion.PENDIENTE
+            )
+        )
+    )
+    for seleccion in selecciones:
+        seleccion.estado = EstadoSeleccion.ANULADA
+    db.flush()
+
+    resumen = {
+        "selecciones_anuladas": len(selecciones),
+        "boletos_recalculados": 0,
+        "boletos_reembolsados": 0,
+        "monto_reembolsado": Decimal("0.00"),
+    }
+    ahora = _ahora()
+    for boleto in _boletos_sin_liquidar(db, {s.boleto_id for s in selecciones}):
+        vivas = [s for s in boleto.selecciones if s.estado != EstadoSeleccion.ANULADA]
+        if not vivas:
+            boleto.estado = EstadoBoleto.REEMBOLSADO
+            boleto.liquidado_en = ahora
+            billetera_service.acreditar(
+                db,
+                boleto.usuario_id,
+                boleto.monto,
+                TipoTransaccion.REEMBOLSO,
+                boleto.id,
+                f"Reembolso boleto {str(boleto.id)[:8]}",
+            )
+            resumen["boletos_reembolsados"] += 1
+            resumen["monto_reembolsado"] += boleto.monto
+        else:
+            # Se usan las cuotas congeladas: el contrato se respeta sin el evento cancelado.
+            boleto.cuota_total = redondear(prod(s.cuota_congelada for s in vivas))
+            boleto.ganancia_potencial = redondear(boleto.monto * boleto.cuota_total)
+            cerrar_boleto_si_corresponde(db, boleto, ahora)
+            resumen["boletos_recalculados"] += 1
 
     db.flush()
     return resumen
