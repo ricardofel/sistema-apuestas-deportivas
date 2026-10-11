@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Generic, TypeVar
+from typing import Annotated, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -9,13 +9,16 @@ from app.db.enums import EstadoBoleto, EstadoSeleccion, TipoSeleccion
 
 T = TypeVar("T")
 
+# Regla del monto de una apuesta; la usan BoletoIn y el panel de boleto.
+MontoApuesta = Annotated[Decimal, Field(ge=1, le=500, max_digits=12, decimal_places=2)]
+
 
 class SeleccionIn(BaseModel):
     cuota_id: uuid.UUID
 
 
 class BoletoIn(BaseModel):
-    monto: Decimal = Field(ge=1, le=500, max_digits=12, decimal_places=2)
+    monto: MontoApuesta
     selecciones: list[SeleccionIn] = Field(min_length=1, max_length=10)
 
 

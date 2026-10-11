@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from decimal import ROUND_HALF_UP, Decimal
 from math import prod
 from uuid import UUID
@@ -20,6 +21,12 @@ def redondear(valor: Decimal) -> Decimal:
     return valor.quantize(CENTAVO, rounding=ROUND_HALF_UP)
 
 
+def cotizar(valores: Iterable[Decimal], monto: Decimal) -> tuple[Decimal, Decimal]:
+    """Cuota total (producto redondeado) y ganancia potencial para un monto."""
+    cuota_total = redondear(prod(valores))
+    return cuota_total, redondear(monto * cuota_total)
+
+
 def crear_boleto(db: Session, usuario: Usuario, datos: BoletoIn) -> tuple[Boleto, Decimal]:
     """Crea el boleto y cobra el monto, todo o nada.
 
@@ -31,8 +38,7 @@ def crear_boleto(db: Session, usuario: Usuario, datos: BoletoIn) -> tuple[Boleto
     if len({c.evento_id for c in cuotas}) != len(cuotas):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No puedes apostar dos veces al mismo evento")
 
-    cuota_total = redondear(prod(c.valor for c in cuotas))
-    ganancia = redondear(datos.monto * cuota_total)
+    cuota_total, ganancia = cotizar((c.valor for c in cuotas), datos.monto)
 
     try:
         boleto = Boleto(
