@@ -3,54 +3,57 @@
   de eventos. Contexto: cuotas, cuota_total, ganancia, monto, error, max_selecciones.
 #}
 {% import "boletos/_estados.html" as e with context %}
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:sticky lg:top-6">
-  <div class="flex items-center justify-between">
-    <h2 class="text-lg font-semibold text-slate-900">Tu boleto</h2>
+{% from "eventos/_equipo.html" import monograma %}
+<div class="lg:sticky lg:top-4">
+  <div class="banda">
+    <h2>Tu boleto</h2>
     {% if cuotas %}
-    <span class="text-sm text-slate-500">{{ cuotas | length }} de {{ max_selecciones }}</span>
+    <span class="banda-nota num">{{ cuotas | length }} de {{ max_selecciones }}</span>
     {% endif %}
   </div>
 
-  {% if error %}
-  <p role="alert" class="mt-4 bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg px-3 py-2">{{ error }}</p>
-  {% endif %}
+  <div class="panel">
+    {% if error %}
+    <p role="alert" class="aviso aviso--error mb-3 text-sm">{{ error }}</p>
+    {% endif %}
 
-  {% if cuotas %}
-  <ul class="mt-4 divide-y divide-slate-100">
-    {% for c in cuotas %}
-    <li class="py-3 flex items-start justify-between gap-3">
-      <div>
-        <p class="text-sm font-medium text-slate-900">{{ c.evento.equipo_local }} vs {{ c.evento.equipo_visitante }}</p>
-        <p class="text-sm text-slate-500">{{ e.NOMBRE_RESULTADO[c.seleccion.value] }} · <span class="font-semibold text-emerald-700">{{ c.valor }}</span></p>
+    {% if cuotas %}
+    <ul>
+      {% for c in cuotas %}
+      <li class="boleto-linea">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-900">{{ c.evento.equipo_local }} vs {{ c.evento.equipo_visitante }}</p>
+          <p class="mt-0.5 text-sm text-slate-600">{{ e.NOMBRE_RESULTADO[c.seleccion.value] }} · <span class="num font-extrabold text-slate-900">{{ c.valor }}</span></p>
+        </div>
+        <button type="button" hx-post="/web/boleto/quitar/{{ c.id }}" hx-target="#panel-boleto" hx-swap="innerHTML"
+                aria-label="Quitar {{ c.evento.equipo_local }} vs {{ c.evento.equipo_visitante }}"
+                class="text-slate-600 hover:text-rose-700 text-xl leading-none px-2 py-1 transition">&times;</button>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <div class="boleto-total">
+      <span class="text-sm text-slate-600">Cuota total</span>
+      <strong class="num">{{ cuota_total }}</strong>
+    </div>
+
+    <form class="mt-4 space-y-3" hx-post="/web/boleto/confirmar" hx-target="#panel-boleto" hx-swap="innerHTML">
+      <div class="campo">
+        <label for="monto-boleto">Monto (1.00 a 500.00)</label>
+        <input id="monto-boleto" name="monto" type="number" step="0.01" min="1" max="500" value="{{ monto }}" required
+               placeholder="10.00" inputmode="decimal"
+               hx-get="/web/boleto/panel" hx-trigger="input changed delay:300ms"
+               hx-target="#ganancia-boleto" hx-select="#ganancia-boleto" hx-swap="outerHTML"
+               class="entrada num">
       </div>
-      <button type="button" hx-post="/web/boleto/quitar/{{ c.id }}" hx-target="#panel-boleto" hx-swap="innerHTML"
-              aria-label="Quitar {{ c.evento.equipo_local }} vs {{ c.evento.equipo_visitante }}"
-              class="text-slate-400 hover:text-rose-700 text-xl leading-none px-1 transition">&times;</button>
-    </li>
-    {% endfor %}
-  </ul>
-
-  <div class="mt-2 pt-3 border-t border-slate-200 flex justify-between text-sm">
-    <span class="text-slate-500">Cuota total</span>
-    <span class="font-semibold text-slate-900">{{ cuota_total }}</span>
+      <div id="ganancia-boleto" class="flex justify-between items-baseline text-sm">
+        <span class="text-slate-600">Ganancia potencial</span>
+        <span class="num text-xl font-extrabold text-slate-900">{{ ganancia if ganancia is not none else "—" }}</span>
+      </div>
+      <button type="submit" class="btn w-full">Confirmar apuesta</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-slate-600">Elige una cuota de un evento para empezar tu boleto.</p>
+    {% endif %}
   </div>
-
-  <form class="mt-4 space-y-3" hx-post="/web/boleto/confirmar" hx-target="#panel-boleto" hx-swap="innerHTML">
-    <div>
-      <label for="monto-boleto" class="text-sm text-slate-500">Monto (1.00 a 500.00)</label>
-      <input id="monto-boleto" name="monto" type="number" step="0.01" min="1" max="500" value="{{ monto }}" required
-             placeholder="10.00" inputmode="decimal"
-             hx-get="/web/boleto/panel" hx-trigger="input changed delay:300ms"
-             hx-target="#ganancia-boleto" hx-select="#ganancia-boleto" hx-swap="outerHTML"
-             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-    </div>
-    <div id="ganancia-boleto" class="flex justify-between text-sm">
-      <span class="text-slate-500">Ganancia potencial</span>
-      <span class="font-semibold text-emerald-700">{{ ganancia if ganancia is not none else "—" }}</span>
-    </div>
-    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Confirmar apuesta</button>
-  </form>
-  {% else %}
-  <p class="mt-4 text-sm text-slate-500">Elige una cuota de un evento para empezar tu boleto.</p>
-  {% endif %}
 </div>
