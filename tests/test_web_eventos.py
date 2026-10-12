@@ -53,7 +53,8 @@ def test_solo_muestra_eventos_programados_y_futuros(client, db):
     crear_evento(db, deporte, equipo_local="YaInicio", inicia_en=_futuro(-2))
     crear_evento(db, deporte, equipo_local="Cancelado", estado=EstadoEvento.CANCELADO)
     crear_evento(db, deporte, equipo_local="Finalizado", estado=EstadoEvento.FINALIZADO)
-    html = client.get("/eventos").text
+    # Solo la lista de partidos abiertos: los finalizados aparecen aparte, en "Últimos resultados".
+    html = client.get("/eventos", headers={"HX-Request": "true"}).text
     assert "Visible" in html
     assert "YaInicio" not in html and "Cancelado" not in html and "Finalizado" not in html
 

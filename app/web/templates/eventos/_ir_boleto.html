@@ -1,0 +1,18 @@
+{#
+  En pantallas chicas el panel de boleto queda al final de la página: este acceso fijo aparece cuando el
+  boleto tiene selecciones y lleva hasta él. Cuenta los <li> del panel de Daniel cada vez que HTMX lo actualiza.
+#}
+<a href="#panel-boleto" id="ir-boleto" class="ir-boleto" hidden>Ver mi boleto (<span class="num n">0</span>)</a>
+<script>
+  (function () {
+    var panel = document.getElementById('panel-boleto');
+    var enlace = document.getElementById('ir-boleto');
+    if (!panel || !enlace) return;
+    document.body.addEventListener('htmx:afterSwap', function (evento) {
+      if (evento.target !== panel && !panel.contains(evento.target)) return;
+      var cantidad = panel.querySelectorAll('li').length;
+      enlace.hidden = cantidad === 0;
+      enlace.querySelector('.n').textContent = cantidad;
+    });
+  })();
+</script>

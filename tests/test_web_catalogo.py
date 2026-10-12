@@ -106,7 +106,7 @@ class TestBotonesDeCuota:
         evento = _evento_con_cuotas(db)
         html = sesion.get(f"/eventos/{evento.id}").text
         assert PANEL in html and 'hx-get="/web/boleto/panel"' in html and 'hx-trigger="load"' in html
-        assert "lg:grid-cols-3" in html
+        assert 'aria-label="Tu boleto"' in html
 
     def test_sin_sesion_la_cuota_enlaza_al_login(self, client, db):
         evento = _evento_con_cuotas(db)
@@ -139,7 +139,7 @@ class TestListaConBoleto:
         html = sesion.get("/eventos").text
         assert html.count('hx-post="/web/boleto/agregar/') == 3
         assert f'hx-post="/web/boleto/agregar/{evento.cuotas[0].id}"' in html
-        assert html.count(PANEL) == 1 and "lg:grid-cols-3" in html
+        assert html.count(PANEL) == 1 and 'aria-label="Boleto y resultados"' in html
 
     def test_sin_sesion_enlazan_al_login_y_no_hay_panel(self, client, db):
         _evento_con_cuotas(db)
@@ -155,3 +155,86 @@ class TestListaConBoleto:
     def test_la_tarjeta_enlaza_al_detalle(self, client, db):
         evento = _evento_con_cuotas(db)
         assert f'href="/eventos/{evento.id}"' in client.get("/eventos").text
+
+
+class TestMasPartidos:
+    def test_lista_los_proximos_del_mismo_deporte_sin_repetir_el_actual(self, client, db):
+        futbol, tenis = crear_deporte(db, "Fútbol"), crear_deporte(db, "Tenis")
+        actual = crear_evento(db, futbol, equipo_local="EquipoActual", inicia_en=_futuro(5))
+        crear_evento(db, futbol, equipo_local="OtroFutbol", inicia_en=_futuro(8))
+        crear_evento(db, tenis, equipo_local="JugadorTenis", inicia_en=_futuro(8))
+        html = client.get(f"/eventos/{actual.id}").text
+        assert "Más partidos de Fútbol" in html and "OtroFutbol" in html
+        assert "JugadorTenis" not in html
+        assert 'href="/eventos/' + str(actual.id) + '"' not in html
+
+    def test_no_incluye_eventos_cerrados(self, client, db):
+        deporte = crear_deporte(db)
+        actual = crear_evento(db, deporte, inicia_en=_futuro(5))
+        crear_evento(db, deporte, equipo_local="YaCerrado", estado=EstadoEvento.FINALIZADO)
+        assert "YaCerrado" not in client.get(f"/eventos/{actual.id}").text
+
+    def test_sin_otros_partidos_no_muestra_la_seccion(self, client, db):
+        evento = crear_evento(db)
+        assert "Más partidos" not in client.get(f"/eventos/{evento.id}").text
+
+    def test_limita_la_cantidad_de_partidos(self, client, db):
+        deporte = crear_deporte(db)
+        actual = crear_evento(db, deporte, equipo_local="Actual", inicia_en=_futuro(1))
+        for i in range(9):
+            crear_evento(db, deporte, equipo_local=f"Rival{i}", inicia_en=_futuro(i + 2))
+        html = client.get(f"/eventos/{actual.id}").text
+        assert sum(f"Rival{i}" in html for i in range(9)) == 5
+
+
+class TestUltimosResultadosEnLaLista:
+    def test_muestra_el_ganador_de_los_finalizados(self, client, db):
+        deporte = crear_deporte(db)
+        crear_evento(
+            db, deporte, equipo_local="Ganador FC", equipo_visitante="Perdedor SC",
+            estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.LOCAL, inicia_en=_futuro(-3),
+        )
+        html = client.get("/eventos").text
+        assert "Últimos resultados" in html and "Ganó Ganador FC" in html
+
+    def test_el_empate_se_indica_como_tal(self, client, db):
+        crear_evento(db, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.EMPATE, inicia_en=_futuro(-3))
+        assert "Empate" in client.get("/eventos").text
+
+    def test_sin_finalizados_no_aparece_la_tarjeta(self, client, db):
+        crear_evento(db)
+        assert "Últimos resultados" not in client.get("/eventos").text
+
+    def test_tambien_se_ve_sin_sesion(self, client, db):
+        crear_evento(db, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.VISITANTE, inicia_en=_futuro(-3))
+        html = client.get("/eventos").text
+        assert "Últimos resultados" in html and PANEL not in html
+
+    def test_el_fragmento_htmx_no_la_incluye(self, client, db):
+        crear_evento(db, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.LOCAL, inicia_en=_futuro(-3))
+        assert "Últimos resultados" not in client.get("/eventos", headers={"HX-Request": "true"}).text
+
+
+class TestFavoritoYConteos:
+    def test_marca_la_cuota_mas_baja_como_favorita(self, client, db):
+        evento = crear_evento(db)
+        crear_cuota(db, evento, TipoSeleccion.LOCAL, Decimal("1.50"))
+        crear_cuota(db, evento, TipoSeleccion.VISITANTE, Decimal("2.60"))
+        html = client.get("/eventos").text
+        assert html.count("cuota--favorita") == 1
+        assert 'title="Favorito: la cuota más baja"' in html
+
+    def test_una_sola_cuota_no_tiene_favorito(self, client, db):
+        evento = crear_evento(db)
+        crear_cuota(db, evento, TipoSeleccion.LOCAL, Decimal("1.50"))
+        assert "cuota--favorita" not in client.get("/eventos").text
+
+    def test_cuenta_los_partidos_abiertos_y_por_dia(self, client, db):
+        deporte = crear_deporte(db)
+        for horas in (30, 31, 32):
+            crear_evento(db, deporte, equipo_local=f"Eq{horas}", inicia_en=_futuro(horas))
+        html = client.get("/eventos").text
+        assert "3</span>&nbsp;partidos abiertos" in html
+
+    def test_el_pie_de_pagina_aclara_que_los_creditos_son_virtuales(self, client):
+        assert "no se mueve dinero real" in client.get("/eventos").text

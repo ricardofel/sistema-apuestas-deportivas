@@ -1,0 +1,24 @@
+{#
+  Últimos resultados: partidos finalizados con su ganador. Contexto: resultados (eventos FINALIZADOS).
+  Solo se muestra si hay alguno.
+#}
+{% from "eventos/_equipo.html" import monograma %}
+{% if resultados %}
+<section class="resultados" aria-labelledby="titulo-resultados">
+  <h2 id="titulo-resultados">Últimos resultados</h2>
+  <ul class="mt-2">
+    {% for r in resultados %}
+    {% set gana = r.resultado.value %}
+    <li class="resultado-fila">
+      <a href="/eventos/{{ r.id }}">
+        <span class="equipo {{ 'equipo--gana' if gana == 'LOCAL' else 'equipo--pierde' if gana == 'VISITANTE' else '' }}">{{ monograma(r.equipo_local) }}<span>{{ r.equipo_local }}</span></span>
+        <span class="equipo mt-1 {{ 'equipo--gana' if gana == 'VISITANTE' else 'equipo--pierde' if gana == 'LOCAL' else '' }}">{{ monograma(r.equipo_visitante) }}<span>{{ r.equipo_visitante }}</span></span>
+        <p class="resultado-nota">
+          {% if gana == "LOCAL" %}Ganó {{ r.equipo_local }}{% elif gana == "VISITANTE" %}Ganó {{ r.equipo_visitante }}{% else %}Empate{% endif %}
+        </p>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

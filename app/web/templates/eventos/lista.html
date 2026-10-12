@@ -3,17 +3,19 @@
 {% block titulo %}Eventos{% endblock %}
 
 {% block contenido %}
-<h1 class="text-2xl font-semibold text-slate-900">Eventos disponibles</h1>
-<p class="text-sm text-slate-500 mt-1">Elige un resultado para sumarlo a tu boleto.</p>
+<h1 class="text-3xl">Partidos</h1>
+<p class="mt-1 text-sm text-slate-500">Toca una cuota para sumarla a tu boleto. La barra gruesa marca al favorito, la cuota más baja.</p>
 
-<div class="mt-6{% if usuario %} grid gap-6 lg:grid-cols-3{% endif %}">
-  <div id="contenido-eventos" class="lg:col-span-2">
+<div class="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_21rem]">
+  <div id="contenido-eventos">
     {% include "eventos/_lista.html" %}
   </div>
-  {% if usuario %}
-  <aside class="lg:col-span-1">
+  <aside aria-label="Boleto y resultados" class="lg:self-start">
+    {% if usuario %}
     <div id="panel-boleto" hx-get="/web/boleto/panel" hx-trigger="load"></div>
+    {% endif %}
+    {% include "eventos/_resultados.html" %}
   </aside>
-  {% endif %}
 </div>
+{% if usuario %}{% include "eventos/_ir_boleto.html" %}{% endif %}
 {% endblock %}

@@ -1,32 +1,42 @@
 {#
-  Cuotas de un evento. Cada cuota activa de un evento que acepta apuestas es un botón HTMX que la
-  agrega al boleto (panel de Daniel, ruta /web/boleto/*); sin sesión enlaza a /login.
-  Parámetros: evento, usuario (o none) y apostable (el evento está PROGRAMADO y aún no inicia).
+  Cuotas de un evento (Local, Empate, Visitante), en columnas fijas para que se alineen entre partidos.
+  Cada cuota activa de un evento que acepta apuestas es un botón HTMX que la agrega al boleto (panel de
+  Daniel, rutas /web/boleto/*); sin sesión enlaza a /login.
+  Parámetros:
+    evento, usuario (o none), apostable (PROGRAMADO y aún no inicia),
+    con_empate: true/false para forzar la columna de empate; none la decide según las cuotas del evento,
+    grande: variante de la pantalla de detalle.
 #}
-{% macro cuotas(evento, usuario, apostable) %}
-{% set base = "flex-1 border rounded-lg px-3 py-2 text-center transition" %}
-{% set vivo = "bg-slate-50 border-slate-200 hover:border-emerald-600 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none" %}
-<div class="flex gap-2">
-  {% for clave, etiqueta in [("LOCAL", "Local"), ("EMPATE", "Empate"), ("VISITANTE", "Visitante")] %}
-  {% set cuota = evento.cuotas | selectattr("seleccion.value", "equalto", clave) | selectattr("activa") | first %}
+{% macro cuotas(evento, usuario, apostable, con_empate=none, grande=false) %}
+{% set activas = evento.cuotas | selectattr("activa") | list %}
+{% set tiene_empate = con_empate if con_empate is not none else (activas | selectattr("seleccion.value", "equalto", "EMPATE") | list | length > 0) %}
+{% set minimo = (activas | map(attribute="valor") | min) if activas | length > 1 else none %}
+{% set columnas = [("LOCAL", "Local")] + ([("EMPATE", "Empate")] if tiene_empate else []) + [("VISITANTE", "Visitante")] %}
+<div class="cuotas{{ ' cuotas--grande' if grande }}" style="--columnas: {{ columnas | length }}">
+  {% for clave, etiqueta in columnas %}
+  {% set cuota = activas | selectattr("seleccion.value", "equalto", clave) | first %}
   {% if cuota %}
+  {% set favorita = ' cuota--favorita' if minimo is not none and cuota.valor == minimo else '' %}
   {% if apostable and usuario %}
   <button type="button" hx-post="/web/boleto/agregar/{{ cuota.id }}" hx-target="#panel-boleto" hx-swap="innerHTML"
-          class="{{ base }} {{ vivo }}">
-    <span class="block text-xs text-slate-500">{{ etiqueta }}</span>
-    <span class="block font-semibold text-emerald-700">{{ cuota.valor }}</span>
+          class="cuota{{ favorita }}"{% if favorita %} title="Favorito: la cuota más baja"{% endif %}>
+    <span class="cuota-etiqueta">{{ etiqueta }}</span>
+    <span class="num">{{ cuota.valor }}</span>
   </button>
   {% elif apostable %}
-  <a href="/login" class="{{ base }} {{ vivo }}">
-    <span class="block text-xs text-slate-500">{{ etiqueta }}</span>
-    <span class="block font-semibold text-emerald-700">{{ cuota.valor }}</span>
+  <a href="/login" class="cuota{{ favorita }}"{% if favorita %} title="Favorito: la cuota más baja"{% endif %}>
+    <span class="cuota-etiqueta">{{ etiqueta }}</span>
+    <span class="num">{{ cuota.valor }}</span>
+    <span class="visualmente-oculto">Inicia sesión para apostar</span>
   </a>
   {% else %}
-  <div class="{{ base }} bg-slate-50 border-slate-200">
-    <span class="block text-xs text-slate-500">{{ etiqueta }}</span>
-    <span class="block font-semibold text-slate-600">{{ cuota.valor }}</span>
+  <div class="cuota cuota--fija{{ favorita }}">
+    <span class="cuota-etiqueta">{{ etiqueta }}</span>
+    <span class="num">{{ cuota.valor }}</span>
   </div>
   {% endif %}
+  {% else %}
+  <span class="cuota cuota--vacia" aria-hidden="true">&ndash;</span>
   {% endif %}
   {% endfor %}
 </div>
