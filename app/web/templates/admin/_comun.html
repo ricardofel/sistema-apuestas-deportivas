@@ -1,20 +1,20 @@
 {# Piezas compartidas por las pantallas de administración del catálogo. #}
 {% macro badge_estado(estado) %}
 {% set estados = {
-  "PROGRAMADO": ("Programado", "bg-amber-100 text-amber-800"),
-  "EN_VIVO": ("En vivo", "bg-amber-100 text-amber-800"),
-  "FINALIZADO": ("Finalizado", "bg-emerald-100 text-emerald-800"),
-  "CANCELADO": ("Cancelado", "bg-rose-100 text-rose-800"),
+  "PROGRAMADO": ("Programado", "etiqueta--pendiente"),
+  "EN_VIVO": ("En vivo", "etiqueta--pendiente"),
+  "FINALIZADO": ("Finalizado", "etiqueta--ganado"),
+  "CANCELADO": ("Cancelado", "etiqueta--perdido"),
 } %}
 {% set etiqueta, clase = estados[estado.value] %}
-<span class="{{ clase }} text-xs px-2 py-1 rounded-full">{{ etiqueta }}</span>
+<span class="etiqueta {{ clase }}">{{ etiqueta }}</span>
 {% endmacro %}
 
 {% macro avisos(mensaje, error) %}
 {% if mensaje %}
-<p role="status" class="mt-4 bg-emerald-100 text-emerald-800 text-sm px-3 py-2 rounded-lg">{{ mensaje }}</p>
+<p role="status" class="aviso aviso--ok mt-4">{{ mensaje }}</p>
 {% endif %}
 {% if error %}
-<p role="alert" class="mt-4 bg-rose-100 text-rose-800 text-sm px-3 py-2 rounded-lg">{{ error }}</p>
+<p role="alert" class="aviso aviso--error mt-4">{{ error }}</p>
 {% endif %}
 {% endmacro %}

@@ -33,7 +33,7 @@ def comun(client, db):
 
 
 def _numeros_del_panel(html: str) -> dict[str, int]:
-    pares = re.findall(r'estado=([A-Z_]+)".*?text-4xl[^>]*>(\d+)<', html, flags=re.S)
+    pares = re.findall(r'data-estado="([A-Z_]+)">(\d+)<', html)
     return {estado: int(cantidad) for estado, cantidad in pares}
 
 
@@ -48,7 +48,7 @@ def _datos_evento(deporte_id, /, **cambios) -> dict:
 
 
 def _filas_de_eventos(html: str) -> list[str]:
-    return re.findall(r'font-medium text-slate-900">(.*?) <span', html)
+    return re.findall(r'class="evento-nombre[^"]*">(.*?) <span', html)
 
 
 class TestPanelAdmin:
@@ -80,7 +80,7 @@ class TestPanelAdmin:
     def test_muestra_la_cantidad_de_deportes_activos(self, admin, db):
         crear_deporte(db, "Fútbol")
         crear_deporte(db, "Tenis")
-        assert re.search(r"Deportes activos</p>\s*<p[^>]*>2<", admin.get("/admin").text)
+        assert re.search(r'data-total="deportes">2<', admin.get("/admin").text)
 
     def test_el_menu_marca_admin_como_activo(self, admin):
         assert 'href="/admin" aria-current="page"' in admin.get("/admin").text
