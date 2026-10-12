@@ -1,11 +1,46 @@
 {% extends "base.html" %}
+{% from "eventos/_equipo.html" import motivo_cancha %}
 
 {% block contenido %}
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-  <h1 class="text-2xl font-semibold text-slate-900">Portal de Apuestas Deportivas</h1>
-  <p class="text-sm text-slate-500 mt-2">Apuesta con créditos virtuales en tus eventos favoritos.</p>
-  <div class="mt-6">
-    <a href="/eventos" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Ver eventos</a>
+<section class="hero" style="margin-top:0;padding-top:2.25rem;padding-bottom:2.5rem" aria-labelledby="titulo-inicio">
+  {{ motivo_cancha() }}
+  <div class="hero-cabecera">
+    <span class="hero-etiqueta">Créditos virtuales</span>
+    <span>Fútbol y tenis &middot; sin dinero real</span>
   </div>
-</div>
+  <h1 id="titulo-inicio" class="mt-4 max-w-2xl text-white" style="font-size:clamp(2.4rem,1.6rem + 3.4vw,4.2rem);line-height:1">Portal de Apuestas Deportivas</h1>
+  <p class="mt-5 max-w-xl text-lg" style="color:color-mix(in oklch, #fff 88%, var(--brand))">
+    Apuesta con créditos virtuales en partidos de fútbol y tenis. El saldo lo recarga el administrador
+    y cada movimiento queda registrado en tu billetera.
+  </p>
+  <div class="mt-8 flex flex-wrap gap-3">
+    <a href="/eventos" class="btn" style="background:var(--signal);border-color:var(--signal);color:var(--signal-ink);min-height:3rem;font-size:1.05rem">Ver partidos</a>
+    {% if not usuario %}
+    <a href="/registro" class="btn btn--sec" style="min-height:3rem;font-size:1.05rem">Crear cuenta</a>
+    {% else %}
+    <a href="/mis-boletos" class="btn btn--sec" style="min-height:3rem;font-size:1.05rem">Mis boletos</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="mt-10" aria-labelledby="titulo-pasos">
+  <div class="banda"><h2 id="titulo-pasos">Cómo funciona</h2></div>
+  <ol class="panel panel--sin-relleno grid md:grid-cols-3 md:divide-x divide-y md:divide-y-0 divide-slate-200">
+    <li class="p-5">
+      <p class="num text-3xl font-extrabold" style="color:var(--brand)">1</p>
+      <p class="mt-1 font-bold text-slate-900">Elige tus cuotas</p>
+      <p class="mt-1 text-sm text-slate-600">Cada partido muestra la cuota de local, empate y visitante. Toca una para sumarla a tu boleto.</p>
+    </li>
+    <li class="p-5">
+      <p class="num text-3xl font-extrabold" style="color:var(--brand)">2</p>
+      <p class="mt-1 font-bold text-slate-900">Confirma el monto</p>
+      <p class="mt-1 text-sm text-slate-600">Puedes armar un boleto simple o una combinada de hasta 10 partidos. Antes de confirmar ves la ganancia potencial.</p>
+    </li>
+    <li class="p-5">
+      <p class="num text-3xl font-extrabold" style="color:var(--brand)">3</p>
+      <p class="mt-1 font-bold text-slate-900">Se liquida solo</p>
+      <p class="mt-1 text-sm text-slate-600">Cuando el administrador registra el resultado, tu boleto pasa a ganado o perdido y el premio llega a tu saldo. Si un partido se cancela, esa selección se anula y tu boleto se recalcula.</p>
+    </li>
+  </ol>
+</section>
 {% endblock %}
