@@ -1,150 +1,162 @@
 {% extends "base.html" %}
 {% from "admin/_comun.html" import badge_estado, avisos %}
+{% from "eventos/_equipo.html" import monograma, motivo_cancha %}
 
 {% block titulo %}{{ evento.equipo_local }} vs {{ evento.equipo_visitante }} (admin){% endblock %}
 
 {% block contenido %}
-{% set input = "w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none" %}
-{% set boton = "bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition" %}
-{% set boton_sec = "bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition" %}
 {% set programado = evento.estado.value == "PROGRAMADO" %}
 
-<a href="/admin/eventos" class="text-sm text-slate-500 hover:text-emerald-700 transition">&larr; Todos los eventos</a>
+<a href="/admin/eventos" class="text-sm text-slate-500 hover:text-slate-900 transition">&larr; Todos los eventos</a>
 
-<div class="mt-2 flex flex-wrap items-center gap-3">
-  <h1 class="text-2xl font-semibold text-slate-900">{{ evento.equipo_local }} <span class="text-slate-400 font-normal">vs</span> {{ evento.equipo_visitante }}</h1>
-  {{ badge_estado(evento.estado) }}
-</div>
-<p class="text-sm text-slate-500 mt-1">{{ evento.deporte.nombre }} &middot; inicia el {{ evento.inicia_en | hora_local }} (hora de Ecuador)
-  &middot; <a href="/eventos/{{ evento.id }}" class="text-emerald-700 hover:text-emerald-800">Ver como usuario</a></p>
+<section class="hero" style="margin-top:0.75rem" aria-labelledby="titulo-evento">
+  {{ motivo_cancha() }}
+  <div class="hero-cabecera">
+    {{ badge_estado(evento.estado) }}
+    <span>{{ evento.deporte.nombre }}</span>
+    <span>inicia el <span class="num">{{ evento.inicia_en | hora_local }}</span> (hora de Ecuador)</span>
+  </div>
+  <h1 id="titulo-evento" class="hero-equipos">
+    <span class="hero-equipo">{{ monograma(evento.equipo_local, true) }}<span>{{ evento.equipo_local }}</span></span>
+    <span class="hero-equipo">{{ monograma(evento.equipo_visitante, true) }}<span>{{ evento.equipo_visitante }}</span></span>
+  </h1>
+  <p class="mt-5 text-sm"><a href="/eventos/{{ evento.id }}" class="enlace" style="color:#fff">Ver como usuario</a></p>
+</section>
 
 {{ avisos(mensaje, error) }}
 
-<div class="mt-6 grid gap-6 lg:grid-cols-2">
-  <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6" aria-labelledby="titulo-datos">
-    <h2 id="titulo-datos" class="text-lg font-semibold text-slate-900">Datos del evento</h2>
-    {% if programado %}
-    <form method="post" action="/admin/eventos/{{ evento.id }}/editar" class="mt-4 space-y-4">
-      <div>
-        <label for="deporte_id" class="text-sm text-slate-500">Deporte</label>
-        <select id="deporte_id" name="deporte_id" required class="{{ input }}">
-          {% for d in deportes %}
-          <option value="{{ d.id }}" {{ "selected" if formulario.deporte_id == d.id | string }}>{{ d.nombre }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="equipo_local" class="text-sm text-slate-500">Equipo local</label>
-        <input id="equipo_local" name="equipo_local" type="text" maxlength="100" required value="{{ formulario.equipo_local }}" class="{{ input }}">
-      </div>
-      <div>
-        <label for="equipo_visitante" class="text-sm text-slate-500">Equipo visitante</label>
-        <input id="equipo_visitante" name="equipo_visitante" type="text" maxlength="100" required value="{{ formulario.equipo_visitante }}" class="{{ input }}">
-      </div>
-      <div>
-        <label for="inicia_en" class="text-sm text-slate-500">Inicio (hora de Ecuador)</label>
-        <input id="inicia_en" name="inicia_en" type="datetime-local" required value="{{ formulario.inicia_en }}" class="{{ input }}">
-      </div>
-      <button type="submit" class="{{ boton }}">Guardar cambios</button>
-    </form>
-    {% else %}
-    <p class="mt-4 text-sm text-slate-500">Un evento {{ "finalizado" if evento.estado.value == "FINALIZADO" else "cancelado" if evento.estado.value == "CANCELADO" else "en vivo" }} ya no se puede editar.</p>
-    {% endif %}
-  </section>
-
-  <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6" aria-labelledby="titulo-cuotas">
-    <h2 id="titulo-cuotas" class="text-lg font-semibold text-slate-900">Cuotas</h2>
-
-    {% if evento.cuotas %}
-    <ul class="mt-4 divide-y divide-slate-100">
-      {% for seleccion, etiqueta, cuota in cuotas if cuota %}
-      <li class="py-3">
-        <div class="flex items-center justify-between gap-2">
-          <p class="font-medium text-slate-900">{{ etiqueta }}
-            {% if not cuota.activa %}<span class="ml-2 bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full">Inactiva</span>{% endif %}
-          </p>
-          <p class="text-lg font-semibold {{ 'text-emerald-700' if cuota.activa else 'text-slate-400' }}">{{ cuota.valor }}</p>
-        </div>
-        <div class="mt-2 flex flex-wrap items-end gap-2">
-          {% if programado %}
-          <form method="post" action="/admin/cuotas/{{ cuota.id }}/editar" class="flex items-end gap-2">
-            <div>
-              <label for="valor-{{ cuota.id }}" class="sr-only">Nuevo valor de la cuota {{ etiqueta }}</label>
-              <input id="valor-{{ cuota.id }}" name="valor" type="number" step="0.01" min="1.01" required placeholder="Nuevo valor"
-                     class="w-32 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-            </div>
-            <button type="submit" class="{{ boton_sec }}">Cambiar valor</button>
-          </form>
-          {% endif %}
-          {% if programado %}
-          <form method="post" action="/admin/cuotas/{{ cuota.id }}/editar">
-            <input type="hidden" name="activa" value="{{ 'false' if cuota.activa else 'true' }}">
-            <button type="submit" class="{{ boton_sec }}">{{ "Desactivar" if cuota.activa else "Activar" }}</button>
-          </form>
-          {% endif %}
-        </div>
-      </li>
-      {% endfor %}
-    </ul>
-    {% elif programado %}
-    <p class="mt-2 text-sm text-slate-500">Carga las cuotas del evento. La de empate es opcional (déjala vacía en deportes sin empate).</p>
-    <form method="post" action="/admin/eventos/{{ evento.id }}/cuotas" class="mt-4 space-y-4">
-      {% for campo, etiqueta, requerida in [("local", "Local", true), ("empate", "Empate (opcional)", false), ("visitante", "Visitante", true)] %}
-      <div>
-        <label for="cuota_{{ campo }}" class="text-sm text-slate-500">{{ etiqueta }}</label>
-        <input id="cuota_{{ campo }}" name="cuota_{{ campo }}" type="number" step="0.01" min="1.01" {{ "required" if requerida }}
-               value="{{ formulario_cuotas[campo] }}" class="{{ input }}">
-      </div>
-      {% endfor %}
-      <button type="submit" class="{{ boton }}">Cargar cuotas</button>
-    </form>
-    {% else %}
-    <p class="mt-4 text-sm text-slate-500">Este evento no tiene cuotas.</p>
-    {% endif %}
-  </section>
-</div>
-
 {% if evento.estado.value == "FINALIZADO" %}
-<p class="mt-6 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3">
+<p class="aviso aviso--ok mt-6">
   Resultado final:
   <strong>{% if evento.resultado.value == "LOCAL" %}gana {{ evento.equipo_local }}{% elif evento.resultado.value == "VISITANTE" %}gana {{ evento.equipo_visitante }}{% else %}empate{% endif %}</strong>.
   Los boletos ya fueron liquidados.
 </p>
 {% elif evento.estado.value == "CANCELADO" %}
-<p class="mt-6 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg px-4 py-3">Evento cancelado. Los boletos fueron reembolsados.</p>
-{% else %}
-<section class="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6" aria-labelledby="titulo-cierre">
-  <h2 id="titulo-cierre" class="text-lg font-semibold text-slate-900">Cerrar el evento</h2>
-  <p class="text-sm text-slate-500 mt-1">Ambas acciones son definitivas: el evento queda inmutable y los boletos se procesan al instante.</p>
-  <div class="mt-4 grid gap-6 lg:grid-cols-2">
-    <form method="post" action="/admin/eventos/{{ evento.id }}/resultado" class="space-y-4">
-      <h3 class="font-medium text-slate-900">Registrar resultado y liquidar</h3>
-      {% if evento.cuotas %}
-      <div>
-        <label for="resultado" class="text-sm text-slate-500">Resultado</label>
-        <select id="resultado" name="resultado" required class="{{ input }}">
-          <option value="" disabled selected>Elige el resultado</option>
-          {% for seleccion, etiqueta, cuota in cuotas if cuota %}
-          <option value="{{ seleccion.value }}">{{ "Gana " ~ evento.equipo_local if seleccion.value == "LOCAL" else "Gana " ~ evento.equipo_visitante if seleccion.value == "VISITANTE" else "Empate" }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <label class="flex items-start gap-2 text-sm text-slate-600">
-        <input type="checkbox" required class="mt-1"> Confirmo el resultado; no se podrá cambiar.
-      </label>
-      <button type="submit" class="{{ boton }}">Registrar resultado</button>
+<p class="aviso aviso--error mt-6">Evento cancelado. Los boletos fueron reembolsados.</p>
+{% endif %}
+
+<div class="mt-8 grid gap-8 lg:grid-cols-2">
+  <section aria-labelledby="titulo-datos">
+    <div class="banda"><h2 id="titulo-datos">Datos del evento</h2></div>
+    <div class="panel">
+      {% if programado %}
+      <form method="post" action="/admin/eventos/{{ evento.id }}/editar" class="space-y-4">
+        <div class="campo">
+          <label for="deporte_id">Deporte</label>
+          <select id="deporte_id" name="deporte_id" required class="entrada">
+            {% for d in deportes %}
+            <option value="{{ d.id }}" {{ "selected" if formulario.deporte_id == d.id | string }}>{{ d.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="campo">
+          <label for="equipo_local">Equipo local</label>
+          <input id="equipo_local" name="equipo_local" type="text" maxlength="100" required value="{{ formulario.equipo_local }}" class="entrada">
+        </div>
+        <div class="campo">
+          <label for="equipo_visitante">Equipo visitante</label>
+          <input id="equipo_visitante" name="equipo_visitante" type="text" maxlength="100" required value="{{ formulario.equipo_visitante }}" class="entrada">
+        </div>
+        <div class="campo">
+          <label for="inicia_en">Inicio (hora de Ecuador)</label>
+          <input id="inicia_en" name="inicia_en" type="datetime-local" required value="{{ formulario.inicia_en }}" class="entrada">
+        </div>
+        <button type="submit" class="btn">Guardar cambios</button>
+      </form>
       {% else %}
-      <p class="text-sm text-slate-500">Carga las cuotas del evento antes de registrar un resultado.</p>
+      <p class="text-sm text-slate-600">Un evento {{ "finalizado" if evento.estado.value == "FINALIZADO" else "cancelado" if evento.estado.value == "CANCELADO" else "en vivo" }} ya no se puede editar.</p>
       {% endif %}
-    </form>
-    <form method="post" action="/admin/eventos/{{ evento.id }}/cancelar" class="space-y-4">
-      <h3 class="font-medium text-slate-900">Cancelar el evento</h3>
-      <p class="text-sm text-slate-500">Se anulan las selecciones pendientes y se reembolsan los boletos afectados.</p>
-      <label class="flex items-start gap-2 text-sm text-slate-600">
-        <input type="checkbox" required class="mt-1"> Confirmo que quiero cancelar este evento.
-      </label>
-      <button type="submit" class="bg-rose-600 hover:bg-rose-700 text-white font-medium px-4 py-2 rounded-lg transition">Cancelar evento</button>
-    </form>
+    </div>
+  </section>
+
+  <section aria-labelledby="titulo-cuotas">
+    <div class="banda"><h2 id="titulo-cuotas">Cuotas</h2></div>
+    <div class="panel {{ 'panel--sin-relleno' if evento.cuotas }}">
+      {% if evento.cuotas %}
+      <ul class="divide-y divide-slate-200">
+        {% for seleccion, etiqueta, cuota in cuotas if cuota %}
+        <li class="p-4">
+          <div class="flex items-center justify-between gap-2">
+            <p class="font-semibold text-slate-900">{{ etiqueta }}
+              {% if not cuota.activa %}<span class="etiqueta etiqueta--neutro ml-2">Inactiva</span>{% endif %}
+            </p>
+            <p class="num text-2xl font-extrabold {{ 'text-slate-900' if cuota.activa else 'text-slate-400' }}">{{ cuota.valor }}</p>
+          </div>
+          {% if programado %}
+          <div class="mt-2 flex flex-wrap items-end gap-2">
+            <form method="post" action="/admin/cuotas/{{ cuota.id }}/editar" class="flex items-end gap-2">
+              <div class="campo">
+                <label for="valor-{{ cuota.id }}" class="visualmente-oculto">Nuevo valor de la cuota {{ etiqueta }}</label>
+                <input id="valor-{{ cuota.id }}" name="valor" type="number" step="0.01" min="1.01" required placeholder="Nuevo valor" class="entrada num" style="width:8rem">
+              </div>
+              <button type="submit" class="btn btn--sec">Cambiar valor</button>
+            </form>
+            <form method="post" action="/admin/cuotas/{{ cuota.id }}/editar">
+              <input type="hidden" name="activa" value="{{ 'false' if cuota.activa else 'true' }}">
+              <button type="submit" class="btn btn--sec">{{ "Desactivar" if cuota.activa else "Activar" }}</button>
+            </form>
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% elif programado %}
+      <p class="text-sm text-slate-600">Carga las cuotas del evento. La de empate es opcional (déjala vacía en deportes sin empate).</p>
+      <form method="post" action="/admin/eventos/{{ evento.id }}/cuotas" class="mt-4 space-y-4">
+        {% for campo, etiqueta, requerida in [("local", "Local", true), ("empate", "Empate (opcional)", false), ("visitante", "Visitante", true)] %}
+        <div class="campo">
+          <label for="cuota_{{ campo }}">{{ etiqueta }}</label>
+          <input id="cuota_{{ campo }}" name="cuota_{{ campo }}" type="number" step="0.01" min="1.01" {{ "required" if requerida }}
+                 value="{{ formulario_cuotas[campo] }}" class="entrada num">
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn">Cargar cuotas</button>
+      </form>
+      {% else %}
+      <p class="text-sm text-slate-600">Este evento no tiene cuotas.</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+{% if evento.estado.value not in ("FINALIZADO", "CANCELADO") %}
+<section class="mt-8" aria-labelledby="titulo-cierre">
+  <div class="banda">
+    <h2 id="titulo-cierre">Cerrar el evento</h2>
+    <span class="banda-nota">Definitivo: el evento queda inmutable</span>
+  </div>
+  <div class="panel">
+    <p class="text-sm text-slate-600">Los boletos se procesan al instante, según la acción que elijas.</p>
+    <div class="mt-4 grid gap-8 lg:grid-cols-2">
+      <form method="post" action="/admin/eventos/{{ evento.id }}/resultado" class="space-y-4">
+        <h3 class="text-lg">Registrar resultado y liquidar</h3>
+        {% if evento.cuotas %}
+        <div class="campo">
+          <label for="resultado">Resultado</label>
+          <select id="resultado" name="resultado" required class="entrada">
+            <option value="" disabled selected>Elige el resultado</option>
+            {% for seleccion, etiqueta, cuota in cuotas if cuota %}
+            <option value="{{ seleccion.value }}">{{ "Gana " ~ evento.equipo_local if seleccion.value == "LOCAL" else "Gana " ~ evento.equipo_visitante if seleccion.value == "VISITANTE" else "Empate" }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <label class="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" required class="mt-1"> Confirmo el resultado; no se podrá cambiar.
+        </label>
+        <button type="submit" class="btn">Registrar resultado</button>
+        {% else %}
+        <p class="text-sm text-slate-600">Carga las cuotas del evento antes de registrar un resultado.</p>
+        {% endif %}
+      </form>
+      <form method="post" action="/admin/eventos/{{ evento.id }}/cancelar" class="space-y-4">
+        <h3 class="text-lg">Cancelar el evento</h3>
+        <p class="text-sm text-slate-600">Se anulan las selecciones pendientes y se reembolsan los boletos afectados.</p>
+        <label class="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" required class="mt-1"> Confirmo que quiero cancelar este evento.
+        </label>
+        <button type="submit" class="btn btn--peligro">Cancelar evento</button>
+      </form>
+    </div>
   </div>
 </section>
 {% endif %}

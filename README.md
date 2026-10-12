@@ -83,6 +83,8 @@ En desarrollo `base.html` usa el CDN de Tailwind. Para la entrega final se compi
 npx tailwindcss@3.4.17 -i ./static/css/input.css -o ./static/css/app.css --minify
 ```
 
+El tema (colores, radios, sombras y fuente) está en `static/js/tema-tailwind.js` y lo leen tanto el CDN como `tailwind.config.js`, así que el CSS compilado se ve igual. Los componentes propios y los tokens de color están en `static/css/portal.css`, que `base.html` ya enlaza. Al pasar al CSS compilado hay que quitar de `base.html` los dos `<script>` de Tailwind (el CDN y `tema-tailwind.js`).
+
 ## Documentación
 
 - [Diagrama de la base de datos](docs/diagrama-base-de-datos.md)

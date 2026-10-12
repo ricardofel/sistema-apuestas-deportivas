@@ -1,16 +1,25 @@
 {#
-  Convenciones de estilo (usar siempre estas clases para que las tres interfaces se vean igual):
-  Contenedor de página : max-w-5xl mx-auto px-4 py-8
-  Tarjeta              : bg-white rounded-xl shadow-sm border border-slate-200 p-6
+  Convenciones de estilo (usar siempre estas clases para que las tres interfaces se vean igual).
+  Los colores, radios y sombras salen de static/css/portal.css: Tailwind se configura abajo para leerlos,
+  así que slate-*, emerald-*, rose-* y amber-* ya son la paleta del portal.
+
+  Contenedor de página : max-w-6xl mx-auto px-4 py-8
+  Panel                : bg-white rounded-xl border border-slate-200 p-6   (sin sombra)
   Botón primario       : bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition
   Botón secundario     : bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition
   Input                : w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none
-  Título de sección    : text-2xl font-semibold text-slate-900
+  Título de sección    : text-2xl font-semibold text-slate-900   (h1 a h3 ya salen condensados)
   Texto secundario     : text-sm text-slate-500
   Badge pendiente      : bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full
   Badge ganado         : bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full
   Badge perdido        : bg-rose-100 text-rose-800 text-xs px-2 py-1 rounded-full
-  Paleta: slate base, emerald acciones/positivo, amber pendiente, rose negativo.
+  Cifras (cuotas, montos, saldo): clase "num" para que los dígitos tengan el mismo ancho.
+  Componentes propios en portal.css (usarlos antes de inventar clases):
+    .hero (bloque de color de cabecera, con motivo_cancha() de eventos/_equipo.html) y .datos/.dato (tiles dentro del hero)
+    .banda + .panel (sección con franja de color), .ticket (boleto), .acceso (login y registro)
+    .cuota, .partido, .dia, .pestanas, .etiqueta, .tabla, .campo/.entrada, .btn, .enlace, .aviso, .mono (monograma de equipo)
+  Paleta: neutros con tinte verde, un acento verde oscuro (acciones y "ganado"), ámbar pendiente, rojo perdido.
+  Sin degradados, sin emojis, sin sombras.
 
   Las plantillas reciben `usuario` (o nada si no hay sesión) en el contexto.
   Las fechas se guardan en UTC: mostrarlas con el filtro `| hora_local` (hora de Ecuador).
@@ -18,56 +27,63 @@
 #}
 {% macro enlace(href, texto) %}
 {% set activo = request.url.path == href or request.url.path.startswith(href + "/") %}
-<a href="{{ href }}"{% if activo %} aria-current="page"{% endif %}
-   class="flex items-center h-full border-b-2 text-base font-medium transition {{ 'border-emerald-600 text-emerald-700' if activo else 'border-transparent text-slate-600 hover:text-emerald-700' }}">{{ texto }}</a>
+<a href="{{ href }}"{% if activo %} aria-current="page"{% endif %} class="navlink">{{ texto }}</a>
 {% endmacro %}
 <!DOCTYPE html>
-<html lang="es" class="h-full bg-slate-50">
+<html lang="es" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block titulo %}Portal de Apuestas{% endblock %}</title>
-  {# Desarrollo: CDN. Para la entrega final reemplazar por <link rel="stylesheet" href="/static/css/app.css"> (ver README). #}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;display=swap">
+  <link rel="stylesheet" href="/static/css/portal.css">
+  {# Desarrollo: CDN. Para la entrega final compilar Tailwind con esta misma configuración (ver README). #}
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/js/tema-tailwind.js"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="min-h-full text-slate-700">
-  <nav class="bg-white border-b border-slate-200">
-    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-8 h-full">
-        <a href="/" class="flex items-center gap-2 text-xl font-bold text-slate-900">
-          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white text-base">A</span>
-          Apuestas
-        </a>
-        <div class="flex items-stretch gap-6 h-full">
-          {{ enlace("/eventos", "Eventos") }}
-          {% if usuario %}
-          {{ enlace("/mis-boletos", "Mis boletos") }}
-          {{ enlace("/billetera", "Billetera") }}
-          {% if usuario.rol == "ADMIN" %}
-          {{ enlace("/admin", "Admin") }}
-          {% endif %}
-          {% endif %}
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
+<body class="min-h-full flex flex-col text-slate-700">
+  <header class="topbar">
+    <div class="topbar-in max-w-6xl mx-auto px-4">
+      <a href="/" class="wordmark">Apuestas</a>
+      <nav class="topnav" aria-label="Principal">
+        {{ enlace("/eventos", "Eventos") }}
+        {% if usuario %}
+        {{ enlace("/mis-boletos", "Mis boletos") }}
+        {{ enlace("/billetera", "Billetera") }}
+        {% if usuario.rol == "ADMIN" %}
+        {{ enlace("/admin", "Admin") }}
+        {% endif %}
+        {% endif %}
+      </nav>
+      <div class="topbar-right">
         {% if usuario %}
         {% include "billetera/_saldo_nav.html" %}
-        <span class="text-slate-600 font-medium">{{ usuario.nombre_usuario }}</span>
+        <span class="topbar-usuario">{{ usuario.nombre_usuario }}</span>
         <form method="post" action="/logout">
-          <button type="submit" class="border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium px-4 py-2 rounded-lg transition">Salir</button>
+          <button type="submit" class="btn-barra">Salir</button>
         </form>
         {% else %}
-        <a href="/login" class="border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-semibold px-5 py-2 rounded-lg transition">Iniciar sesión</a>
-        <a href="/registro" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2 rounded-lg transition">Registrarse</a>
+        <a href="/login" class="btn-barra inline-flex items-center">Iniciar sesión</a>
+        <a href="/registro" class="btn-barra btn-barra--solido inline-flex items-center">Registrarse</a>
         {% endif %}
       </div>
     </div>
-  </nav>
+  </header>
 
-  <main class="max-w-5xl mx-auto px-4 py-8">
+  <main class="max-w-6xl w-full mx-auto px-4 py-8 flex-1">
     {% block contenido %}{% endblock %}
   </main>
+
+  <footer class="pie">
+    <div class="max-w-6xl mx-auto px-4 py-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
+      <span class="wordmark">Apuestas</span>
+      <p>Los créditos son virtuales: no se mueve dinero real. Proyecto de Arquitectura de Software, UTPL 2026.</p>
+    </div>
+  </footer>
 </body>
 </html>

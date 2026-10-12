@@ -1,0 +1,27 @@
+{#
+  Monograma de un equipo: dos letras sobre un color estable (según el nombre). Es decorativo para los
+  lectores de pantalla porque el nombre del equipo siempre va al lado.
+#}
+{% macro monograma(nombre, grande=false) -%}
+<span class="mono mono--{{ color_equipo(nombre) }}{{ ' mono--grande' if grande }}" aria-hidden="true">{{ iniciales_equipo(nombre) }}</span>
+{%- endmacro %}
+
+{#
+  Textura de cancha del bloque destacado, solo formas planas: franjas de césped (rectángulos alternos) y
+  medio campo en trazo. Decorativa: no lleva información.
+#}
+{% macro motivo_cancha() -%}
+<svg class="hero-motivo" viewBox="0 0 400 240" preserveAspectRatio="xMaxYMid slice" aria-hidden="true" focusable="false">
+  <g class="hero-franjas">
+    {% for i in range(0, 8, 2) %}<rect x="{{ i * 50 }}" y="0" width="50" height="240"/>{% endfor %}
+  </g>
+  <g class="hero-lineas" stroke-width="2">
+    <line x1="200" y1="0" x2="200" y2="240"/>
+    <circle cx="200" cy="120" r="44"/>
+    <rect x="296" y="52" width="120" height="136"/>
+    <rect x="356" y="88" width="60" height="64"/>
+    <path d="M296 98 A 38 38 0 0 0 296 142"/>
+  </g>
+  <circle cx="200" cy="120" r="3" fill="#fff"/>
+</svg>
+{%- endmacro %}

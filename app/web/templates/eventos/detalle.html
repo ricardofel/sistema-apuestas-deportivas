@@ -1,60 +1,91 @@
 {% extends "base.html" %}
 {% from "eventos/_cuotas.html" import cuotas %}
+{% from "eventos/_equipo.html" import monograma, motivo_cancha %}
 
 {% block titulo %}{{ evento.equipo_local }} vs {{ evento.equipo_visitante }}{% endblock %}
 
 {% block contenido %}
 {% set estados = {
-  "PROGRAMADO": ("Programado", "bg-amber-100 text-amber-800"),
-  "EN_VIVO": ("En vivo", "bg-amber-100 text-amber-800"),
-  "FINALIZADO": ("Finalizado", "bg-emerald-100 text-emerald-800"),
-  "CANCELADO": ("Cancelado", "bg-rose-100 text-rose-800"),
+  "PROGRAMADO": ("Programado", "etiqueta--pendiente"),
+  "EN_VIVO": ("En vivo", "etiqueta--pendiente"),
+  "FINALIZADO": ("Finalizado", "etiqueta--ganado"),
+  "CANCELADO": ("Cancelado", "etiqueta--perdido"),
 } %}
 {% set etiqueta_estado, clase_estado = estados[evento.estado.value] %}
 
-<a href="/eventos" class="text-sm text-slate-500 hover:text-emerald-700 transition">&larr; Todos los eventos</a>
+<a href="/eventos" class="text-sm text-slate-500 hover:text-slate-900 transition">&larr; Todos los eventos</a>
 
-<div class="mt-4{% if usuario %} grid gap-6 lg:grid-cols-3{% endif %}">
-  <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <div class="flex items-center justify-between">
-      <span class="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded-full">{{ evento.deporte.nombre }}</span>
-      <span class="{{ clase_estado }} text-xs px-2 py-1 rounded-full">{{ etiqueta_estado }}</span>
-    </div>
+<div class="mt-2{% if usuario %} grid gap-8 lg:grid-cols-[minmax(0,1fr)_21rem]{% endif %}">
+  <div>
+    <section class="hero" aria-labelledby="titulo-evento" style="margin-top:0">
+      {{ motivo_cancha() }}
+      <div class="hero-cabecera">
+        <span class="etiqueta {{ clase_estado }}">{{ etiqueta_estado }}</span>
+        <span>{{ evento.deporte.nombre }}</span>
+        <span class="num">{{ evento.inicia_en | hora_local }}</span>
+        <span>hora de Ecuador</span>
+      </div>
 
-    <h1 class="mt-6 text-3xl font-semibold text-slate-900">
-      {{ evento.equipo_local }} <span class="text-slate-400 font-normal">vs</span> {{ evento.equipo_visitante }}
-    </h1>
-    <p class="mt-2 text-sm text-slate-500">Inicia el {{ evento.inicia_en | hora_local }} (hora de Ecuador)</p>
+      <h1 id="titulo-evento" class="hero-equipos">
+        <span class="hero-equipo">{{ monograma(evento.equipo_local, true) }}<span>{{ evento.equipo_local }}</span></span>
+        <span class="hero-equipo">{{ monograma(evento.equipo_visitante, true) }}<span>{{ evento.equipo_visitante }}</span></span>
+      </h1>
+
+      {% if evento.cuotas %}
+      <h2 class="visualmente-oculto">Cuotas</h2>
+      {{ cuotas(evento, usuario, apostable, none, true) }}
+      {% endif %}
+    </section>
+
+    {% if not evento.cuotas %}
+    <p class="mt-6 text-sm text-slate-500">Este evento todavía no tiene cuotas disponibles.</p>
+    {% elif apostable and not usuario %}
+    <p class="mt-4 text-sm text-slate-500"><a href="/login" class="enlace">Inicia sesión</a> para sumar una cuota a tu boleto.</p>
+    {% endif %}
 
     {% if evento.estado.value == "FINALIZADO" %}
-    <div class="mt-6 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-      <p class="text-sm text-slate-500">Resultado</p>
-      <p class="text-lg font-semibold text-emerald-800">
+    <div class="aviso aviso--ok mt-6">
+      <p class="text-sm">Resultado</p>
+      <p class="text-lg font-bold">
         {% if evento.resultado.value == "LOCAL" %}Gana {{ evento.equipo_local }}
         {% elif evento.resultado.value == "VISITANTE" %}Gana {{ evento.equipo_visitante }}
         {% else %}Empate{% endif %}
       </p>
     </div>
     {% elif evento.estado.value == "CANCELADO" %}
-    <p class="mt-6 bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg px-4 py-3">
-      Este evento fue cancelado. Las apuestas se reembolsan.
-    </p>
+    <p class="aviso aviso--error mt-6">Este evento fue cancelado. Las apuestas se reembolsan.</p>
     {% endif %}
 
-    <h2 class="mt-8 text-sm font-medium text-slate-500">Cuotas</h2>
-    <div class="mt-2">
-      {% if evento.cuotas %}
-      {{ cuotas(evento, usuario, apostable) }}
-      {% else %}
-      <p class="text-sm text-slate-500">Este evento todavía no tiene cuotas disponibles.</p>
-      {% endif %}
-    </div>
-  </section>
+    {% if otros_grupos %}
+    <section class="seccion mt-12" aria-labelledby="titulo-otros">
+      <h2 id="titulo-otros" class="text-lg">Más partidos de {{ evento.deporte.nombre }}</h2>
+      {% for grupo in otros_grupos %}
+      <p class="mt-4 text-sm font-semibold text-slate-900">{{ grupo.etiqueta }}</p>
+      <ul class="mt-1 divide-y divide-slate-200 border-y border-slate-200">
+        {% for otro, hora in grupo.partidos %}
+        <li>
+          <a href="/eventos/{{ otro.id }}" class="flex items-center gap-4 py-3 hover:bg-slate-100 transition">
+            <span class="num w-12 shrink-0 font-bold text-slate-900">{{ hora }}</span>
+            <span class="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium text-slate-900">
+              <span class="equipo">{{ monograma(otro.equipo_local) }}<span>{{ otro.equipo_local }}</span></span>
+              <span class="text-slate-500 font-normal">vs</span>
+              <span class="equipo">{{ monograma(otro.equipo_visitante) }}<span>{{ otro.equipo_visitante }}</span></span>
+            </span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+      <p class="mt-4 text-sm"><a href="/eventos" class="enlace">Ver todos los partidos</a></p>
+    </section>
+    {% endif %}
+  </div>
 
   {% if usuario %}
-  <aside class="lg:col-span-1">
+  <aside aria-label="Tu boleto">
     <div id="panel-boleto" hx-get="/web/boleto/panel" hx-trigger="load"></div>
   </aside>
   {% endif %}
 </div>
+{% if usuario %}{% include "eventos/_ir_boleto.html" %}{% endif %}
 {% endblock %}

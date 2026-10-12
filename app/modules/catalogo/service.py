@@ -288,3 +288,16 @@ def contar_eventos_por_estado(db: Session) -> dict[EstadoEvento, int]:
 
 def contar_deportes(db: Session) -> int:
     return db.scalar(select(func.count()).select_from(Deporte).where(Deporte.activo.is_(True))) or 0
+
+
+def listar_ultimos_resultados(db: Session, limite: int = 5) -> list[Evento]:
+    """Eventos FINALIZADOS más recientes primero (por hora de inicio), de deportes activos."""
+    consulta = (
+        select(Evento)
+        .join(Evento.deporte)
+        .where(Evento.estado == EstadoEvento.FINALIZADO, Deporte.activo.is_(True))
+        .options(contains_eager(Evento.deporte))
+        .order_by(Evento.inicia_en.desc(), Evento.id)
+        .limit(limite)
+    )
+    return list(db.scalars(consulta))

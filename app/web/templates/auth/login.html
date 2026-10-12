@@ -1,33 +1,38 @@
 {% extends "base.html" %}
+{% from "eventos/_equipo.html" import motivo_cancha %}
 
 {% block titulo %}Iniciar sesión{% endblock %}
 
 {% block contenido %}
-<div class="max-w-lg mx-auto mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-  <h1 class="text-3xl font-semibold text-slate-900">Iniciar sesión</h1>
-  <p class="text-slate-500 mt-2">Entra para ver tu saldo y apostar en tus eventos favoritos.</p>
+<div class="acceso">
+  <section class="acceso-marca" aria-label="Portal de Apuestas">
+    {{ motivo_cancha() }}
+    <span class="hero-etiqueta">Portal de Apuestas</span>
+    <h2 class="mt-4">Tu saldo y tus boletos, en un solo lugar.</h2>
+    <p>Apuesta con créditos virtuales en partidos de fútbol y tenis. Aquí no se mueve dinero real.</p>
+  </section>
 
-  {% if error %}
-  <p class="mt-6 bg-rose-100 text-rose-800 px-4 py-3 rounded-lg">{{ error }}</p>
-  {% endif %}
+  <section class="acceso-form" aria-labelledby="titulo-login">
+    <h1 id="titulo-login" class="text-3xl">Iniciar sesión</h1>
+    <p class="mt-2 text-slate-600">Entra para ver tu saldo y apostar en tus eventos favoritos.</p>
 
-  <form method="post" action="/login" class="mt-8 space-y-5">
-    <div>
-      <label for="email" class="text-sm font-medium text-slate-700">Email</label>
-      <input id="email" name="email" type="email" required autofocus value="{{ email }}"
-             class="mt-1 w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-    </div>
-    <div>
-      <label for="password" class="text-sm font-medium text-slate-700">Contraseña</label>
-      <input id="password" name="password" type="password" required
-             class="mt-1 w-full border border-slate-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-    </div>
-    <button type="submit"
-            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-semibold px-6 py-3.5 rounded-lg shadow-md hover:shadow-lg transition">
-      Iniciar sesión
-    </button>
-  </form>
+    {% if error %}
+    <p role="alert" class="aviso aviso--error mt-6">{{ error }}</p>
+    {% endif %}
 
-  <p class="mt-6 text-slate-500">¿No tienes cuenta? <a href="/registro" class="text-emerald-700 font-medium hover:underline">Regístrate</a></p>
+    <form method="post" action="/login" class="mt-6 space-y-5">
+      <div class="campo">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autofocus value="{{ email }}" class="entrada">
+      </div>
+      <div class="campo">
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" required class="entrada">
+      </div>
+      <button type="submit" class="btn w-full" style="min-height:3rem;font-size:1.05rem">Iniciar sesión</button>
+    </form>
+
+    <p class="mt-6 text-slate-600">¿No tienes cuenta? <a href="/registro" class="enlace">Regístrate</a></p>
+  </section>
 </div>
 {% endblock %}

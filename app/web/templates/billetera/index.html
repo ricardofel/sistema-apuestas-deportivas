@@ -1,45 +1,59 @@
 {% extends "base.html" %}
+{% from "eventos/_equipo.html" import motivo_cancha %}
 
 {% block titulo %}Mi billetera{% endblock %}
 
 {% set estilos_tipo = {
-  "RECARGA": "bg-emerald-100 text-emerald-800",
-  "PREMIO": "bg-emerald-100 text-emerald-800",
-  "REEMBOLSO": "bg-amber-100 text-amber-800",
-  "APUESTA": "bg-slate-100 text-slate-700"
+  "RECARGA": "etiqueta--ganado",
+  "PREMIO": "etiqueta--ganado",
+  "REEMBOLSO": "etiqueta--pendiente",
+  "APUESTA": "etiqueta--neutro"
 } %}
 
 {% block contenido %}
-<div class="space-y-6">
-  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <h1 class="text-2xl font-semibold text-slate-900">Mi billetera</h1>
-    <p class="text-sm text-slate-500 mt-2">Saldo disponible</p>
-    <p class="text-3xl font-semibold text-slate-900">{{ usuario.saldo }} <span class="text-base font-normal text-slate-500">créditos</span></p>
+<section class="hero" style="margin-top:0" aria-labelledby="titulo-billetera">
+  {{ motivo_cancha() }}
+  <div class="hero-cabecera">
+    <span class="hero-etiqueta">Billetera</span>
+    <span>Créditos virtuales: no hay dinero real</span>
+  </div>
+  <h1 id="titulo-billetera" class="mt-3 text-4xl text-white">Mi billetera</h1>
+
+  <dl class="datos datos--una">
+    <div class="dato dato--destacado">
+      <dt>Saldo disponible</dt>
+      <dd>{{ usuario.saldo }} <span class="text-base font-semibold">créditos</span></dd>
+    </div>
+  </dl>
+</section>
+
+<section class="mt-8" aria-labelledby="titulo-historial">
+  <div class="banda">
+    <h2 id="titulo-historial">Historial de movimientos</h2>
+    <a href="/mis-boletos">Ver mis boletos</a>
   </div>
 
-  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <h2 class="text-lg font-semibold text-slate-900">Historial de movimientos</h2>
-
+  <div class="panel {{ 'panel--sin-relleno' if transacciones }}">
     {% if transacciones %}
-    <div class="mt-4 overflow-x-auto">
-      <table class="w-full text-sm text-left">
-        <thead class="text-slate-500 border-b border-slate-200">
+    <div class="overflow-x-auto relative">
+      <table class="tabla">
+        <thead>
           <tr>
-            <th class="py-2 pr-4 font-medium">Fecha</th>
-            <th class="py-2 pr-4 font-medium">Tipo</th>
-            <th class="py-2 pr-4 font-medium">Descripción</th>
-            <th class="py-2 pr-4 font-medium text-right">Monto</th>
-            <th class="py-2 font-medium text-right">Saldo</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Descripción</th>
+            <th scope="col" class="num">Monto</th>
+            <th scope="col" class="num">Saldo</th>
           </tr>
         </thead>
         <tbody>
           {% for t in transacciones %}
-          <tr class="border-b border-slate-100">
-            <td class="py-2 pr-4 whitespace-nowrap">{{ t.creado_en | hora_local }}</td>
-            <td class="py-2 pr-4"><span class="{{ estilos_tipo[t.tipo.value] }} text-xs px-2 py-1 rounded-full">{{ t.tipo.value }}</span></td>
-            <td class="py-2 pr-4 text-slate-500">{{ t.descripcion or "" }}</td>
-            <td class="py-2 pr-4 text-right font-medium {{ 'text-rose-700' if t.monto < 0 else 'text-emerald-700' }}">{{ '{:+.2f}'.format(t.monto) }}</td>
-            <td class="py-2 text-right">{{ t.saldo_posterior }}</td>
+          <tr>
+            <td class="num whitespace-nowrap text-slate-600" style="text-align:left">{{ t.creado_en | hora_local }}</td>
+            <td><span class="etiqueta {{ estilos_tipo[t.tipo.value] }}">{{ t.tipo.value }}</span></td>
+            <td class="text-slate-600">{{ t.descripcion or "" }}</td>
+            <td class="num font-extrabold {{ 'text-rose-700' if t.monto < 0 else 'text-emerald-700' }}">{{ '{:+.2f}'.format(t.monto) }}</td>
+            <td class="num text-slate-900">{{ t.saldo_posterior }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -47,19 +61,19 @@
     </div>
 
     {% if paginas > 1 %}
-    <div class="mt-4 flex items-center justify-between text-sm">
+    <div class="flex items-center justify-between p-4 text-sm">
       {% if pagina > 1 %}
-      <a href="/billetera?pagina={{ pagina - 1 }}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Anterior</a>
+      <a href="/billetera?pagina={{ pagina - 1 }}" class="btn btn--sec">Anterior</a>
       {% else %}<span></span>{% endif %}
-      <span class="text-slate-500">Página {{ pagina }} de {{ paginas }}</span>
+      <span class="text-slate-600">Página {{ pagina }} de {{ paginas }}</span>
       {% if pagina < paginas %}
-      <a href="/billetera?pagina={{ pagina + 1 }}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Siguiente</a>
+      <a href="/billetera?pagina={{ pagina + 1 }}" class="btn btn--sec">Siguiente</a>
       {% else %}<span></span>{% endif %}
     </div>
     {% endif %}
     {% else %}
-    <p class="mt-4 text-sm text-slate-500">Todavía no tienes movimientos.</p>
+    <p class="text-sm text-slate-600">Todavía no tienes movimientos.</p>
     {% endif %}
   </div>
-</div>
+</section>
 {% endblock %}

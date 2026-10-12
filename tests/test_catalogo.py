@@ -303,3 +303,32 @@ class TestContadores:
         inactivo.activo = False
         db.commit()
         assert service.contar_deportes(db) == 1
+
+
+class TestUltimosResultados:
+    def test_devuelve_los_finalizados_del_mas_reciente_al_mas_antiguo(self, db):
+        deporte = crear_deporte(db)
+        antiguo = crear_evento(db, deporte, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.LOCAL, inicia_en=_futuro(-30))
+        reciente = crear_evento(db, deporte, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.EMPATE, inicia_en=_futuro(-2))
+        resultados = service.listar_ultimos_resultados(db)
+        assert [e.id for e in resultados] == [reciente.id, antiguo.id]
+
+    def test_ignora_los_eventos_que_no_estan_finalizados(self, db):
+        deporte = crear_deporte(db)
+        crear_evento(db, deporte)
+        crear_evento(db, deporte, estado=EstadoEvento.CANCELADO)
+        crear_evento(db, deporte, estado=EstadoEvento.EN_VIVO)
+        assert service.listar_ultimos_resultados(db) == []
+
+    def test_respeta_el_limite(self, db):
+        deporte = crear_deporte(db)
+        for horas in range(1, 8):
+            crear_evento(db, deporte, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.LOCAL, inicia_en=_futuro(-horas))
+        assert len(service.listar_ultimos_resultados(db, limite=3)) == 3
+
+    def test_excluye_deportes_inactivos(self, db):
+        deporte = crear_deporte(db, "Esgrima")
+        crear_evento(db, deporte, estado=EstadoEvento.FINALIZADO, resultado=TipoSeleccion.LOCAL)
+        deporte.activo = False
+        db.commit()
+        assert service.listar_ultimos_resultados(db) == []

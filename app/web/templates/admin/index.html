@@ -1,43 +1,61 @@
 {% extends "base.html" %}
+{% from "eventos/_equipo.html" import motivo_cancha %}
 
 {% block titulo %}Administración{% endblock %}
 
 {% block contenido %}
-{% set contadores = [
-  ("PROGRAMADO", "Programados", "border-amber-300 bg-amber-50", "text-amber-800"),
-  ("EN_VIVO", "En vivo", "border-amber-300 bg-amber-50", "text-amber-800"),
-  ("FINALIZADO", "Finalizados", "border-emerald-300 bg-emerald-50", "text-emerald-800"),
-  ("CANCELADO", "Cancelados", "border-rose-300 bg-rose-50", "text-rose-800"),
+{% set filas = [
+  ("PROGRAMADO", "Programados", "Abiertos a apuestas"),
+  ("EN_VIVO", "En vivo", "Ya empezaron, sin resultado"),
+  ("FINALIZADO", "Finalizados", "Boletos liquidados"),
+  ("CANCELADO", "Cancelados", "Boletos reembolsados"),
 ] %}
 
-<h1 class="text-2xl font-semibold text-slate-900">Panel de administración</h1>
-<p class="text-sm text-slate-500 mt-1">Catálogo deportivo y saldo de los usuarios.</p>
-
-<section class="mt-8" aria-labelledby="titulo-eventos">
-  <div class="flex items-end justify-between">
-    <h2 id="titulo-eventos" class="text-sm font-medium text-slate-500">Eventos por estado</h2>
-    <a href="/admin/eventos" class="text-sm font-medium text-emerald-700 hover:text-emerald-800 transition">Gestionar eventos &rarr;</a>
+<section class="hero" style="margin-top:0" aria-labelledby="titulo-admin">
+  {{ motivo_cancha() }}
+  <div class="hero-cabecera">
+    <span class="hero-etiqueta">Administración</span>
+    <span>Catálogo deportivo y saldo de los usuarios</span>
   </div>
-  <div class="mt-3 grid gap-4 grid-cols-2 lg:grid-cols-4">
-    {% for clave, etiqueta, caja, texto in contadores %}
-    <a href="/admin/eventos?estado={{ clave }}" class="rounded-xl border p-5 transition hover:shadow-sm {{ caja }}">
-      <p class="text-4xl font-semibold {{ texto }}">{{ eventos_por_estado[clave] }}</p>
-      <p class="mt-1 text-sm {{ texto }}">{{ etiqueta }}</p>
-    </a>
+  <h1 id="titulo-admin" class="mt-4 text-4xl text-white">Eventos por estado</h1>
+
+  <ul class="datos">
+    {% for clave, etiqueta, nota in filas %}
+    <li class="dato">
+      <span class="dato-rotulo">{{ etiqueta }}</span>
+      <strong class="dato-valor" data-estado="{{ clave }}">{{ eventos_por_estado[clave] }}</strong>
+      <a href="/admin/eventos?estado={{ clave }}" class="enlace text-sm">Ver <span class="visualmente-oculto">{{ etiqueta | lower }}</span></a>
+      <p class="text-xs text-slate-600 mt-1">{{ nota }}</p>
+    </li>
     {% endfor %}
-  </div>
+  </ul>
 </section>
 
-<section class="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Accesos">
-  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <p class="text-sm text-slate-500">Deportes activos</p>
-    <p class="mt-1 text-3xl font-semibold text-slate-900">{{ total_deportes }}</p>
-    <a href="/admin/eventos" class="mt-4 inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-lg transition">Crear deporte o evento</a>
-  </div>
-  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <p class="text-sm text-slate-500">Usuarios</p>
-    <p class="mt-1 text-lg font-semibold text-slate-900">Recarga de saldo</p>
-    <a href="/admin/billetera" class="mt-4 inline-block bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition">Ir a billetera</a>
-  </div>
-</section>
+<div class="mt-8 grid gap-8 lg:grid-cols-2">
+  <section aria-labelledby="titulo-tareas">
+    <div class="banda"><h2 id="titulo-tareas">Tareas</h2></div>
+    <ul class="panel panel--sin-relleno divide-y divide-slate-200">
+      <li class="p-4">
+        <a href="/admin/eventos" class="enlace">Crear deporte o evento</a>
+        <p class="text-sm text-slate-600 mt-1"><span class="num" data-total="deportes">{{ total_deportes }}</span> deportes activos. Después de crear un evento se cargan sus cuotas.</p>
+      </li>
+      <li class="p-4">
+        <a href="/admin/eventos?estado=PROGRAMADO" class="enlace">Registrar un resultado o cancelar</a>
+        <p class="text-sm text-slate-600 mt-1">Abre un evento programado o en vivo y ciérralo desde su página.</p>
+      </li>
+      <li class="p-4">
+        <a href="/admin/billetera" class="enlace">Recargar saldo a un usuario</a>
+        <p class="text-sm text-slate-600 mt-1">Acredita créditos virtuales a una cuenta.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="titulo-todos">
+    <div class="banda"><h2 id="titulo-todos">Todos los eventos</h2></div>
+    <div class="panel">
+      <p class="text-slate-700">Revisa, filtra por estado o deporte y entra a la gestión de cada partido.</p>
+      <a href="/admin/eventos" class="btn mt-4">Ir a la lista de eventos</a>
+    </div>
+  </section>
+</div>
 {% endblock %}
