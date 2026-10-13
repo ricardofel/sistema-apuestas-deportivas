@@ -4,7 +4,6 @@
 
 **Apuesta con créditos virtuales. Sin dinero real, sin riesgo, con la arquitectura de un sistema que sí lo moviera.**
 
-> [!IMPORTANT]
 > **Construido en un solo día.** Es la tarea de Arquitectura de Software (Ingeniería en Ciencias de la Computación, UTPL 2026): el objetivo no era la app más completa, sino demostrar **trabajo en equipo real con ramas de Git** —tres personas, tres ramas, integración por pull request— y **desarrollo potenciado por IA** ([Claude Code](https://claude.com/claude-code)), eligiendo en cada paso la arquitectura que el tiempo y los recursos disponibles permitían, no la más sofisticada posible.
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
